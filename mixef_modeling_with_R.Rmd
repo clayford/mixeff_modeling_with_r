@@ -5,7 +5,7 @@ editor_options:
   chunk_output_type: inline
 ---
 
-This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+This is an R Markdown Notebook. When you execute code within the notebook, the results appear beneath the code. 
 
 Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter* (Win/Linux) or *Cmd+Shift+Return* (Mac). 
 
@@ -33,7 +33,7 @@ library(ggeffects)
 
 ## Simple linear regression review
 
-Instead of using mathematical statistics, we'll try to motivate mixed-effect/multilevel models using simulation. Below we generate data from a straight line model. y is completely determined by x.
+Instead of using mathematical statistics, we'll try to motivate mixed-effect/multilevel models using simulation. Below we generate data from a straight line model. y is completely determined by x. We might say the intercept (3) and slope (2) are _fixed effects_.
 
 ```{r}
 x <- 1:10
@@ -43,7 +43,7 @@ plot(y ~ x, data = d)
 ```
 
 
-Now let's add some noise. We'll use 10 random draws from a Normal distribution with mean 0 and standard deviation of 1.5. The `set.seed(1)` function ensures we all draw the same values. Now y looks associated with x, but not completely determined by x.
+Now let's add some noise to each observation. We'll use 10 random draws from a Normal distribution with mean 0 and standard deviation of 1.5. The `set.seed(1)` function ensures we all draw the same values. Now y looks associated with x, but not completely determined by x. We might say each observation has a _random effect_.
 
 ```{r}
 set.seed(1)
@@ -59,7 +59,9 @@ m <- lm(y ~ x, data = d)
 summary(m)
 ```
 
-Assuming our data came from a function of the form y = a + b*x with noise sampled from a Normal distribution, the model estimates a as 2.7468 and b as 2.0821. Those are fairly close to the true values of 3 and 2. The noise is estimated to be from a Normal distribution with mean 0 and standard deviation 1.214. Again close to the true value of 1.5.
+Assuming our data came from a function of the form _y = a + b*x_ with noise sampled from a Normal distribution, the model estimates a as 2.7468 and b as 2.0821. Those are fairly close to the true values of 3 and 2. The noise is estimated to be from a Normal distribution with mean 0 and standard deviation 1.214 (Residual standard error). Again close to the true value of 1.5.
+
+We might say the _fixed effects_ are about 2.75 and 2.08, and the _random effect_ is 1.24.
 
 If we like we can fit this model to the data using the ggeffects package.
 
@@ -71,9 +73,10 @@ plot(ggeffect(m, terms = "x"), add.data = TRUE)
 
 ## Motivation for mixed-effect/multilevel models
 
-Pretend the previous example data was for one subject. What if we had 7 subjects? How might we simulate that data? Maybe we want to allow subjects to have a different intercept, or a different slope, or both? 
+Pretend the previous example data was for one subject. What if we had 7 subjects, each with 10 observations? 
 
-Let's simulate data where we add noise to the intercept that's _specific to each subject_.
+Let's simulate data where we add noise to the intercept that's specific to each subject. In other words each subject has a _random effect_. 
+
 
 ```{r}
 # generate 7 id numbers, 10 each
@@ -82,21 +85,31 @@ id <- gl(n = 7, k = 10)
 # repeat x times
 x <- rep(1:10, 7)
 
-# generate noise: 10 * 7 = 70 total observation
+# generate a random effect specific to each observation (n = 10 * 7)
 set.seed(2)
-noise <- rnorm(7 * 10, mean = 0, sd = 1.5)
+obs_noise <- rnorm(7 * 10, mean = 0, sd = 1.5)
 
-# generate subject-specific noise; only 7 values
+# generate a random effect specific to each subject (n = 7)
 set.seed(3)
-rand_int <- rnorm(7, mean = 0, sd = 2)
+subj_noise <- rnorm(7, mean = 0, sd = 2)
 
-# generate y; add subject-specific noise to intercept
-y <- 3 + rand_int[id] + 2*x + noise
+# generate y; add subject random effect to intercept;
+# rand_int[id] uses id as index numbers to repeat subj_noise values
+y <- (3 + subj_noise[id]) + 2*x + obs_noise
 d2 <- data.frame(id, y, x)
-d2
 ```
 
-Let's visualize the data. We have lines with _different intercepts_ but similar slopes. The argument `method = "lm"` below adds a regression line to each subject's values.
+Now we have two fixed effects:
+- Intercept = 3
+- Slope = 2
+
+And two random effects:
+- Observation: N(0, 1.5)
+- Subject: N(0, 2)
+
+Let's visualize the data. We have lines with _different intercepts_ but similar slopes. That's because _we added each subject's random effect to the fixed intercept_. Any differences in slopes are due to random effects associated with each observation.
+
+The argument `method = "lm"` below adds a regression line to each subject's values.
 
 ```{r}
 ggplot(d2) +
@@ -105,9 +118,11 @@ ggplot(d2) +
   geom_smooth(method = "lm", se = FALSE)
 ```
 
-How do we "work backwards" and recover the true intercept, slope and two noise parameters?
+How do we "work backwards" and recover the true intercept, slope and two random effect parameters?
 
 **linear mixed-effect models, or multilevel models**
+
+Because we are dealing with models with a mix of fixed and random effects, we sometimes call these **Mixed-Effect Models**. Another name is **Multilevel Models** because we're dealing with different levels of observations. (eg, we observe 7 subjects, but also observe 10 observations on each subject.)
 
 Below we model y as a function of x plus an intercept (1) that is conditional on id (the subject) using the `lmer()` function from the lme4 package. Notice this is the _correct model_! The y value really is a function of x plus an intercept that varies between subjects.  
 
@@ -116,9 +131,9 @@ me1 <- lmer(y ~ x + (1|id), data = d2)
 summary(me1)
 ```
 
-The summary says that assuming this data came from a straight line model with an intercept and slope, the model estimates the intercept to be 2.65 and the slope to be 1.97 (under _Fixed Effects_). These are very close to the true values of 3 and 2. 
+The _Fixed Effects_ section says that assuming this data came from a straight line model with an intercept and slope, the model estimates the intercept to be 2.65 and the slope to be 1.97. These are very close to the true values of 3 and 2. 
 
-The summary also reports two standard deviations: one for id and and one called "Residual" (under _Random Effects_). The first is the estimate of the standard deviation of the normal distribution from which the subject-specific noise was drawn: 1.157. The second is the estimate of the standard deviation of the normal distribution from which the residual noise was drawn: 1.795. Recall the true values were 2 and 1.5, respectively. 
+The _Random Effects_ section reports two standard deviations: one for id and and one called "Residual". The first is the estimate of the standard deviation of the normal distribution from which the subject-specific noise was drawn: 1.157. The second is the estimate of the standard deviation of the normal distribution from which the residual noise was drawn: 1.795. Recall the true values were 2 and 1.5, respectively. 
 
 If we look at the coefficients of this model, notice everyone got their _own intercept_ but has the same slope. We have essentially fit a straight line model to each subject. This is sometimes called a _random intercept model_. Each subject has a random effect associated with the intercept.
 
@@ -127,43 +142,57 @@ coef(me1)
 ```
 
 
-This is basically mixed-effect/multilevel modeling: _trying to work backward to determine the data generating process_. Our example was simple and we knew the data generating process because we simulated the data. In real life we never know if our model is correct (spoiler: it never is) and the data generating process is complicated.
+This is one way to think of mixed-effect/multilevel modeling: _trying to work backward to determine the data generation process_. Our example was simple and we knew the data generating process because we simulated the data. In real life we never know if our model is correct (spoiler: it never is) and the data generating process is complicated.
 
 ## Checking assumptions
 
-Notice the assumptions that `lmer()` made:
+Notice two assumptions that `lmer()` made:
 
-1. The variance (noise) is constant, both within and between subjects
-2. The variance (noise) comes from a Normal distribution, both within and between subjects
+1. The variance (noise) is constant for both random effects.
+2. The variance (noise) comes from a Normal distribution for both random effects
 
-We can check those assumptions with diagnostic plots.
+We can assess those assumptions with _diagnostic plots_.
 
-Check constant variance within subjects. Points should be evenly scattered around 0.
+Check constant variance for Residuals (aka, within subjects). Points should be evenly scattered around 0.
 
 ```{r}
 plot(me1)
 ```
 
-Check constant variance _between subjects_. Boxplots should be evenly scattered around 0 for each subject.
+Check constant variance for Subjects (aka, between subjects). Boxplots should be evenly scattered around 0 for each subject.
 
 ```{r}
 plot(me1, id ~ resid(.))
 ```
 
-Check that the variance (noise) comes from a Normal distribution. We need to use a function in the lattice package called `qqmath()`
+We may also want to assess that the variance (noise) comes from a Normal distribution. We need to use a function in the lattice package called `qqmath()`. (The lattice package comes with R.)
 
-Remember we have two sources of variation: within subjects (Residuals) and between subjects (id). To check within subject normality, we use the `qqmath()` function in the lattice package. The points should lie close to the diagonal line.
+Remember we have two sources of variation (or random effects): Residuals (within subjects) and id (between subjects). To check Residual normality, we use the `qqmath()` function in the lattice package. The points should lie close to the diagonal line.
 
 ```{r}
 lattice::qqmath(me1)
 ```
 
-To assess the normality assumption of the between subject variance we again use the `qqmath()` function but first have to extract the random effects from the model object using the `ranef()` function. This is similar to the previous plot but only has 7 points (one for each subject). It also has a +/- 1 standard deviation bar to give some sense of the uncertainty in the estimate. We'd like those point to roughly form a diagonal line.
+To assess the normality assumption of the subjects' random effects we again use the `qqmath()` function, but first have to extract the estimated random effects from the model object using the `ranef()` function. 
+
+Remember the subject random effects we generated: `subj_noise`?
+
+```{r}
+subj_noise
+```
+
+The model also tries to estimate those values as well. We can see them using the `ranef()` function.
+
+```{r}
+ranef(me1)
+```
+
+This is similar to the previous plot but only has 7 points (one for each subject). It also has a +/- 1 standard deviation bar to give some sense of the uncertainty in the estimate of each subject's random effect. We'd like those point to roughly form a diagonal line.
 
 ```{r}
 lattice::qqmath(ranef(me1))
-
 ```
+
 
 ## Using our model for predictions
 
@@ -174,7 +203,10 @@ predict(m, newdata = data.frame(x = 3),
         interval = "confidence")
 ```
 
-Predictions with mixed-effect/multilevel models require a little extra thought. We need to decide whether or not we want to condition on random effects. In other words, are we making a prediction for any subject, or for a particular subject, such as subject 1 (id = 1)?
+_Predictions with mixed-effect/multilevel models require extra thought_. We need to decide whether or not we want to condition on random effects. In other words, are we making a prediction....
+
+- for any subject, or 
+- for a particular subject, such as subject 1 (id = 1)?
 
 To make a prediction for any subject, perhaps a new subject who wasn't sampled, we specify `re.form=NA`. This says just use fixed effects to make a prediction.
 
@@ -206,47 +238,70 @@ ggpredict(me1, terms = "x", type = "re") |>
 ```
 
 
-It takes a little more work to get fitted lines for each subject. We need to specify `type = "re"` and add "id" to the `terms` argument. Notice each fitted line has a different intercept but the same slope. 
+It takes more work to get fitted lines for each subject. We need to specify `type = "re"` and add "id" to the `terms` argument. Notice each fitted line has a different intercept but the same slope. 
 
 ```{r}
-ggpredict(me1, terms = c("x", "id"), type = "re") |> 
+ggpredict(me1, terms = c("x", "id"), type = "random") |> 
   plot(ci = FALSE, add.data = TRUE)
 ```
 
 
 ## CODE ALONG 1
 
-Let's simulate data where subjects have random slopes and random intercepts.
+Run the following code to load a data set.
 
 ```{r}
-id <- gl(n = 7, k = 10)
-x <- rep(1:10, 7)
-set.seed(2)
-noise <- rnorm(7 * 10, mean = 0, sd = 1.5)
-set.seed(3)
-rand_int <- rnorm(7, mean = 0, sd = 2)
-
-# random effect for slope
-set.seed(4)
-rand_slope <- rnorm(7, mean = 0, sd = 3)
-
-# generate y; add subject-specific noise to intercept
-y <- 3 + rand_int[id] + (2 + rand_slope[id])*x + noise
-d3 <- data.frame(id, y, x)
-d3
+d3 <- read.csv("data/d.csv")
+str(d3)
 ```
 
-Now let's fit the correct model, with a random intercept and random slope. Let's name the model "me2"
+Visualize the data using ggplot2 similar to what we used above. Probably better to just group by id and not use color.
 
 ```{r}
-me2 <- lmer(y ~ x + (x||id), data = d3)
-summary(me2)
+ggplot(d3) +
+  aes(x = x, y = y, group = id) +
+  geom_point() +
+  geom_line()
 ```
 
-Let's plot the fitted model _for each subject_ using ggeffects.
+
+Model y as a function of x with a random intercept conditional on id. Call the model `me3`.
 
 ```{r}
-ggpredict(me2, terms = c("x", "id"), type = "re") |>
+me3 <- lmer(y ~ x + (1|id), data = d3)
+summary(me3)
+```
+
+Check the constant variance assumption for the observations and subjects. What do you think?
+
+```{r}
+plot(me3)
+```
+
+Now fit a model that assumes the subject exerts a random effect on both the intercept and slope, using the formula `y ~ x + (x|id)`. Call the model `me4`.
+
+```{r}
+me4 <- lmer(y ~ x + (x|id), data = d3)
+summary(me4)
+```
+
+Check the assumption of constant variance for the observation random effect again. What do you think?
+
+```{r}
+plot(me4)
+```
+
+
+```{r}
+ggpredict(me4, terms = "x") |>
+  plot()
+```
+
+
+Plot the fitted model _for each subject_ using ggeffects.
+
+```{r}
+ggpredict(me4, terms = c("x", "id[1:10]"), type = "random") |> 
   plot(ci = FALSE, add.data = TRUE)
 ```
 
