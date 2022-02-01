@@ -1,5 +1,5 @@
 # data with subject random effect on intercept and slope
-n <- 10
+n <- 7
 id <- gl(n = n, k = 10)
 x <- rep(1:10, n)
 set.seed(2)
@@ -7,7 +7,7 @@ obs_noise <- rnorm(n * 10, mean = 0, sd = 0.7)
 
 # simulate correlated subject random effects
 set.seed(4)
-V <- matrix(c(0.6, -0.8, 
+V <- matrix(c(2.1, -0.8, 
               -0.8, 1.5), nrow = 2)
 subj_noise <- MASS::mvrnorm(n, mu = c(0,0), Sigma = V)
 

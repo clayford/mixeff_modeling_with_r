@@ -15,9 +15,9 @@ ratdrink <- read.csv("ratdrink.csv")
 # if URL not available and ratdrink.csv in working directory:
 # ratdrink <- read.csv("ratdrink.csv")
 
-# The data consist of 5 weekly measurements of body weight for 27 rats. The 
-# first 10 rats are on a control treatment while 7 rats have thyroxine added to 
-# their drinking water. 10 rats have thiouracil added to their water. We're 
+# The data consist of 5 weekly measurements of body weight for 27 rats. The
+# first 10 rats are on a control treatment while 7 rats have thyroxine added to
+# their drinking water. 10 rats have thiouracil added to their water. We're
 # interested in how the treatments affect the weight of the rats. Source:
 # faraway package (Faraway, 2006)
 
@@ -36,7 +36,7 @@ interaction.plot(x.factor = ratdrink$weeks,
 
 # interaction plot with ggplot
 ggplot(ratdrink, aes(x = weeks, y = wt, color = treat, group = treat)) +
-  stat_summary(fun.y = mean, geom = "line")
+  stat_summary(fun = mean, geom = "line")
 
 # exploratory plots
 # scatterplot without grouping
@@ -52,7 +52,7 @@ ggplot(ratdrink, aes(x=weeks, y=wt, color=treat, group=subject)) +
 # no interaction between treat and week
 lmm1 <- lmer(wt ~ treat + weeks + (1 | subject), data=ratdrink)
 lmm1
-summary(lmm1, corr=FALSE) # supress "Correlation of Fixed Effects"
+summary(lmm1, corr=FALSE) # suppress "Correlation of Fixed Effects"
 
 # What are Correlation of Fixed Effects?
 # see explanation from lme4 author (Doug Bates):

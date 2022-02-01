@@ -208,14 +208,14 @@ _Predictions with mixed-effect/multilevel models require extra thought_. We need
 - for any subject, or 
 - for a particular subject, such as subject 1 (id = 1)?
 
-To make a prediction for any subject, perhaps a new subject who wasn't sampled, we specify `re.form=NA`. This says just use fixed effects to make a prediction.
+To make a prediction for any subject, perhaps a new subject who wasn't sampled, we specify `re.form=NA`. This says just use fixed effects to make a prediction. Predicted expected y when x = 3 for any subject:
 
 ```{r}
 predict(me1, newdata = data.frame(x = 3),
         re.form=NA)
 ```
 
-To make a prediction for each subject _using their random intercept_, we drop the `re.form=NA` argument and include `id = 1:7` in our new data frame.
+To make a prediction for each subject _using their random intercept_, we drop the `re.form=NA` argument and include `id = 1:7` in our new data frame. Predict expected y when x = 3 for each subject.
 
 ```{r}
 predict(me1, newdata = data.frame(x = 3, id = 1:7))
@@ -230,15 +230,15 @@ ggpredict(me1, terms = "x") |>
   plot(add.data = TRUE)
 ```
 
-To incorporate the additional uncertainty, we set `type = "re"` (for "random effects"). Notice the confidence ribbon is much wider.
+To incorporate the additional uncertainty, we set `type = "random"` (for "random effects"). Notice the confidence ribbon is much wider.
 
 ```{r}
-ggpredict(me1, terms = "x", type = "re") |>
+ggpredict(me1, terms = "x", type = "random") |>
   plot(add.data = TRUE)
 ```
 
 
-It takes more work to get fitted lines for each subject. We need to specify `type = "re"` and add "id" to the `terms` argument. Notice each fitted line has a different intercept but the same slope. 
+It takes more work to get fitted lines for each subject. We need to specify `type = "random"` and add "id" to the `terms` argument. Notice each fitted line has a different intercept but the same slope. 
 
 ```{r}
 ggpredict(me1, terms = c("x", "id"), type = "random") |> 
@@ -248,62 +248,155 @@ ggpredict(me1, terms = c("x", "id"), type = "random") |>
 
 ## CODE ALONG 1
 
-Run the following code to load a data set.
+Run the following code to load a new data set.
 
 ```{r}
-d3 <- read.csv("data/d.csv")
+d3 <- read.csv("data/d.csv", 
+               colClasses = c("character", "numeric", "numeric"))
 str(d3)
 ```
 
-Visualize the data using ggplot2 similar to what we used above. Probably better to just group by id and not use color.
+Add new R code chunks by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I* (Win/Linux) or *Cmd+Option+I* (Mac). 
+
+1. Visualize the data using ggplot2. Group by id.
+
+
+2. Model y as a function of x with a random intercept conditional on id. Call the model `me3`.
+
+
+3. Check the constant variance assumption for the observations. What do you think?
+
+
+4. Now fit a model that assumes the subject exerts a random effect on both the intercept and slope, using the formula `y ~ x + (x|id)`. Call the model `me4`.
+
+
+5. Check the assumption of constant variance for the observation random effect again. What do you think?
+
+
+6. Plot the fitted model _for each subject_ using ggeffects.
+
+## Mixed-effect/multilevel modeling with real data
+
+The following data consist of 5 weekly measurements of body weight for 27 rats. The first 10 rats are on a control treatment while 7 rats have thyroxine added to their drinking water. 10 rats have thiouracil added to their water. We're interested in how the treatments affect the weight of the rats. Source: faraway package (Faraway, 2006)
 
 ```{r}
-ggplot(d3) +
-  aes(x = x, y = y, group = id) +
-  geom_point() +
+ratdrink <- read.csv("data/ratdrink.csv")
+ratdrink$subject <- as.character(ratdrink$subject)
+str(ratdrink)
+```
+
+Our data has 135 observations, but these are _not independent_. We have 27 subjects, and 5 observations on each of these subjects.
+
+Let's visualize the data grouped by rat. It appears the trajectories of growth change depending on treatment.
+
+```{r}
+ggplot(ratdrink) +
+  aes(x=weeks, y=wt, color=treat, group=subject) +
+  geom_point() + 
   geom_line()
 ```
 
-
-Model y as a function of x with a random intercept conditional on id. Call the model `me3`.
-
-```{r}
-me3 <- lmer(y ~ x + (1|id), data = d3)
-summary(me3)
-```
-
-Check the constant variance assumption for the observations and subjects. What do you think?
+We may also want to visualize trend lines grouped by treat.
 
 ```{r}
-plot(me3)
-```
-
-Now fit a model that assumes the subject exerts a random effect on both the intercept and slope, using the formula `y ~ x + (x|id)`. Call the model `me4`.
-
-```{r}
-me4 <- lmer(y ~ x + (x|id), data = d3)
-summary(me4)
-```
-
-Check the assumption of constant variance for the observation random effect again. What do you think?
-
-```{r}
-plot(me4)
+ggplot(ratdrink) +
+  aes(x = weeks, y = wt, color = treat) +
+  geom_point() +
+  geom_smooth(se = FALSE)
 ```
 
 
+Again, we're interested in how the treatments affect the weight of the rats.
+
+Let's model wt as a function of treat and weeks and let the intercept be conditional on the random effects of subject. This model allows each rat to have their own intercept but the same effects for treat and weeks.
+
 ```{r}
-ggpredict(me4, terms = "x") |>
-  plot()
+lmm1 <- lmer(wt ~ treat + weeks + (1 | subject), data=ratdrink)
+summary(lmm1, corr=FALSE) # suppress "Correlation of Fixed Effects"
 ```
 
-
-Plot the fitted model _for each subject_ using ggeffects.
+Is this model any good? One way to check is to simply check the constant variance assumption of the Residuals. This doesn't look good.
 
 ```{r}
-ggpredict(me4, terms = c("x", "id[1:10]"), type = "random") |> 
+plot(lmm1)
+```
+
+Another approach is to plot observed versus fitted values by subject. This is sometimes called a "clibration plot." A good model should return values with close to a 1:1 correspondence. It looks like some are ok, but others curve around the line.
+
+```{r}
+plot(lmm1, wt ~ fitted(.) | subject, abline = c(0,1))
+```
+
+Let's plot the fitted model using ggeffects.
+
+```{r}
+ggpredict(lmm1, terms = c("weeks", "treat")) |> 
   plot(ci = FALSE, add.data = TRUE)
 ```
 
-## Mixed-effect/multilevel modeling with real data
+## CODE ALONG 2
+
+It appears the effect of weeks may depend on treat. 
+
+1. Let's fit a model with an interaction between treat and weeks, and let's leave the intercept conditional on subject. Call the model `lmm2`
+
+```{r}
+lmm2 <- lmer(wt ~ treat * weeks + (1 | subject), data=ratdrink)
+summary(lmm2, corr = FALSE)
+```
+
+2. Is this model "good"? Check the Residual plot.
+
+```{r}
+plot(lmm2)
+```
+
+3. Make a calibration plot.
+
+```{r}
+plot(lmm2, wt ~ fitted(.) | subject, abline = c(0,1))
+```
+
+
+4. Create an effect plot using ggeffects.
+
+```{r}
+ggpredict(lmm2, terms = c("weeks", "treat")) |>
+  plot(ci = FALSE, add.data = TRUE)
+```
+
+5. what's the expected mean weight of a rat on thiouracil at week 4?
+
+```{r}
+predict(lmm2, newdata = data.frame(weeks = 4, treat = "thiouracil"),
+        re.form = NA)
+```
+
+## Interpreting model coefficients
+
+Recall the model summary:
+
+```{r}
+summary(lmm2, corr = FALSE)
+```
+
+Since we have interactions, it takes some work to interpret the coefficients.
+
+- The `Intercept` is the expected weight of a rat at week 0 is the control group: about 52.8 grams
+- The `weeks` coefficient is the expected amount of weight in grams a rat in the control group adds each week: about 26.5 grams.
+
+- The `treatthiouracil` coefficient is what we _add_ to the `Intercept` to get the expected weight of a rat at week 0 is the thiouracil group: about 52.8 + 4.8 = 57.6 grams
+- The `treatthiouracil:weeks` coefficient is what we _add_ to the `weeks` coefficient to the expected amount of weight in grams a rat in the thiouracil group adds each week: about 26.5 + -9.4 = 17.1 grams
+
+The same calculations can be done for the thyroxine coefficients.
+
+The "Std. Error" column quantifies the uncertainty in the coefficient. The "t value" is the ratio Estimate/Std. Error. A t value greater than about 3 in absolute value provides evidence the estimated coefficient is different from 0. In other words, it's more than three standard errors away from 0.
+
+_Where are the p-values?_ In mixed-effect models the distribution of t values for the null hypothesis is not known, at least not for unbalanced data. P-values can be approximated, but not calculated precisely. The `lme4` authors elected to not output p-values. Probably better to look at confidence intervals anyway.
+
+We can get confidence intervals for the coefficients by using the `confint` function. Notice we get confidence intervals for the random effect estimates as well. Setting `oldNames = FALSE` returns more informative names for the random effects.
+
+```{r}
+confint(lmm2, oldNames = TRUE)
+```
 
