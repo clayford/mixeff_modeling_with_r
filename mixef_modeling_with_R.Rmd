@@ -1,5 +1,6 @@
 ---
-title: "Mixed-Effect/Multilevel Modeling with R "
+title: "Mixed-Effect/Multilevel Modeling with R"
+author: "Clay Ford, UVA Library"
 output: html_notebook
 editor_options: 
   chunk_output_type: inline
@@ -66,7 +67,7 @@ We might say the _fixed effects_ are about 2.75 and 2.08, and the _random effect
 If we like we can fit this model to the data using the ggeffects package.
 
 ```{r}
-plot(ggeffect(m, terms = "x"), add.data = TRUE)
+plot(ggpredict(m, terms = "x"), add.data = TRUE)
 
 ```
 
@@ -75,7 +76,7 @@ plot(ggeffect(m, terms = "x"), add.data = TRUE)
 
 Pretend the previous example data was for one subject. What if we had 7 subjects, each with 10 observations? 
 
-Let's simulate data where we add noise to the intercept that's specific to each subject. In other words each subject has a _random effect_. 
+Let's simulate data where we add noise to the intercept that's _specific to each subject_. In other words each subject has a _random effect_. 
 
 
 ```{r}
@@ -127,6 +128,7 @@ Because we are dealing with models with a mix of fixed and random effects, we so
 Below we model y as a function of x plus an intercept (1) that is conditional on id (the subject) using the `lmer()` function from the lme4 package. Notice this is the _correct model_! The y value really is a function of x plus an intercept that varies between subjects.  
 
 ```{r}
+# (1|id) = intercept conditional on id
 me1 <- lmer(y ~ x + (1|id), data = d2)
 summary(me1)
 ```
@@ -187,7 +189,7 @@ The model also tries to estimate those values as well. We can see them using the
 ranef(me1)
 ```
 
-This is similar to the previous plot but only has 7 points (one for each subject). It also has a +/- 1 standard deviation bar to give some sense of the uncertainty in the estimate of each subject's random effect. We'd like those point to roughly form a diagonal line.
+This is similar to the previous plot but only has 7 points (one for each subject). It also has a +/- 1 standard deviation bar to give some sense of the uncertainty in the estimate of each subject's random effect. We'd like those points to roughly form a diagonal line.
 
 ```{r}
 lattice::qqmath(ranef(me1))
@@ -196,7 +198,7 @@ lattice::qqmath(ranef(me1))
 
 ## Using our model for predictions
 
-In our basic linear model, we can make predictions with the `predict()` function. Below we predict y given x = 3 and request a 95% confidence interval.
+In our basic linear model, we can make predictions with the `predict()` function. Below we predict y given x = 3 and request a 95% confidence interval. In other words, what's the expected mean of y given x = 3?
 
 ```{r}
 predict(m, newdata = data.frame(x = 3), 
@@ -208,7 +210,7 @@ _Predictions with mixed-effect/multilevel models require extra thought_. We need
 - for any subject, or 
 - for a particular subject, such as subject 1 (id = 1)?
 
-To make a prediction for any subject, perhaps a new subject who wasn't sampled, we specify `re.form=NA`. This says just use fixed effects to make a prediction. Predicted expected y when x = 3 for any subject:
+To make a prediction for any subject, perhaps a new subject who wasn't sampled, we specify `re.form=NA`. This says just use fixed effects to make a prediction. Predict expected y when x = 3 for any subject:
 
 ```{r}
 predict(me1, newdata = data.frame(x = 3),
@@ -221,7 +223,7 @@ To make a prediction for each subject _using their random intercept_, we drop th
 predict(me1, newdata = data.frame(x = 3, id = 1:7))
 ```
 
-From the lme4 documentation for predict: "There is no option for computing standard errors of predictions because it is difficult to define an efficient method that incorporates uncertainty in the variance parameters." That means we cannot simply ask for confidence intervals for our predictions. We can however use the bootstrap.
+From the lme4 documentation for predict: "There is no option for computing standard errors of predictions because it is difficult to define an efficient method that incorporates uncertainty in the variance parameters." That means we cannot simply ask for confidence intervals for our predictions. We can however use the bootstrap. (see below)
 
 We can also visualize this model with ggeffects. By default it assumes predictions do not make use of random effects.
 
@@ -238,7 +240,7 @@ ggpredict(me1, terms = "x", type = "random") |>
 ```
 
 
-It takes more work to get fitted lines for each subject. We need to specify `type = "random"` and add "id" to the `terms` argument. Notice each fitted line has a different intercept but the same slope. 
+It takes more work to get fitted lines for each subject. We need to specify `type = "random"` and add "id" to the `terms` argument. Notice each fitted line has a different intercept but the same slope. (Honestly, this isn't something that's done very often in practice.)
 
 ```{r}
 ggpredict(me1, terms = c("x", "id"), type = "random") |> 
@@ -248,11 +250,11 @@ ggpredict(me1, terms = c("x", "id"), type = "random") |>
 
 ## CODE ALONG 1
 
-Run the following code to load a new data set.
+Run the following code to load a new data set. 
 
 ```{r}
-d3 <- read.csv("data/d.csv", 
-               colClasses = c("character", "numeric", "numeric"))
+d3 <- read.csv("data/d.csv")
+d3$id <- as.character(d3$id)
 str(d3)
 ```
 
@@ -275,9 +277,13 @@ Add new R code chunks by clicking the *Insert Chunk* button on the toolbar or by
 
 6. Plot the fitted model _for each subject_ using ggeffects.
 
+
+
 ## Mixed-effect/multilevel modeling with real data
 
-The following data consist of 5 weekly measurements of body weight for 27 rats. The first 10 rats are on a control treatment while 7 rats have thyroxine added to their drinking water. 10 rats have thiouracil added to their water. We're interested in how the treatments affect the weight of the rats. Source: faraway package (Faraway, 2006)
+Let's look at some realistic data.
+
+The following data consist of 5 weekly measurements of body weight for 27 rats. 10 rats are on a control treatment. 7 rats have thyroxine added to their drinking water. 10 rats have thiouracil added to their water. We're interested in how the treatments affect the weight of the rats. Source: faraway package (Faraway, 2006)
 
 ```{r}
 ratdrink <- read.csv("data/ratdrink.csv")
@@ -308,12 +314,19 @@ ggplot(ratdrink) +
 
 Again, we're interested in how the treatments affect the weight of the rats.
 
-Let's model wt as a function of treat and weeks and let the intercept be conditional on the random effects of subject. This model allows each rat to have their own intercept but the same effects for treat and weeks.
+Let's model wt as a function of treat and weeks and let the intercept be conditional on the random effects of subject. This model allows each rat to have their own intercept but the same effects for treat and weeks. This model says the effect of weeks is the same regardless of treatment.
 
 ```{r}
 lmm1 <- lmer(wt ~ treat + weeks + (1 | subject), data=ratdrink)
 summary(lmm1, corr=FALSE) # suppress "Correlation of Fixed Effects"
 ```
+
+Naive interpretation:
+
+- Rats gain about 23 grams per week
+- mean weight at week 0 for control group is about 59
+- mean weight at week 0 for thiouracil group is about 59 - 13
+- mean weight at week 0 for thyroxine group is about 59 + 0.5
 
 Is this model any good? One way to check is to simply check the constant variance assumption of the Residuals. This doesn't look good.
 
@@ -321,13 +334,7 @@ Is this model any good? One way to check is to simply check the constant varianc
 plot(lmm1)
 ```
 
-Another approach is to plot observed versus fitted values by subject. This is sometimes called a "clibration plot." A good model should return values with close to a 1:1 correspondence. It looks like some are ok, but others curve around the line.
-
-```{r}
-plot(lmm1, wt ~ fitted(.) | subject, abline = c(0,1))
-```
-
-Let's plot the fitted model using ggeffects.
+Let's plot the fitted model using ggeffects. 
 
 ```{r}
 ggpredict(lmm1, terms = c("weeks", "treat")) |> 
@@ -351,24 +358,18 @@ summary(lmm2, corr = FALSE)
 plot(lmm2)
 ```
 
-3. Make a calibration plot.
-
-```{r}
-plot(lmm2, wt ~ fitted(.) | subject, abline = c(0,1))
-```
-
-
-4. Create an effect plot using ggeffects.
+3. Create an effect plot using ggeffects.
 
 ```{r}
 ggpredict(lmm2, terms = c("weeks", "treat")) |>
   plot(ci = FALSE, add.data = TRUE)
 ```
 
-5. what's the expected mean weight of a rat on thiouracil at week 4?
+4. what's the expected mean weight of a rat at week 4 for each treatment?
 
 ```{r}
-predict(lmm2, newdata = data.frame(weeks = 4, treat = "thiouracil"),
+g <- unique(ratdrink$treat)
+predict(lmm2, newdata = data.frame(weeks = 4, treat = g),
         re.form = NA)
 ```
 
@@ -397,6 +398,84 @@ _Where are the p-values?_ In mixed-effect models the distribution of t values fo
 We can get confidence intervals for the coefficients by using the `confint` function. Notice we get confidence intervals for the random effect estimates as well. Setting `oldNames = FALSE` returns more informative names for the random effects.
 
 ```{r}
-confint(lmm2, oldNames = TRUE)
+confint(lmm2, oldNames = FALSE)
 ```
 
+## Comparing models
+
+We have many options when building a mixed-effect model. In addition to what predictors to include and whether they should interact, we get decide how many random effects to allow. The previous model allowed for one random effect on the intercept. 
+
+Let's allow a random effect on weeks as well. This says the effect of weeks is conditional on each rat. (This may not be correct.)
+
+```{r}
+lmm3 <- lmer(wt ~ treat * weeks + (weeks | subject), data=ratdrink)
+summary(lmm3, corr = FALSE)
+```
+
+Under Random Effects we have three estimates of "noise" or variance. We can think of those values as the standard deviations of Normal distributions (with mean 0) from which random values were drawn. Notice also the random effects for the intercept and weeks are assumed to be correlated. 
+
+If we look at the coefficients, each rat now has their own intercept and weeks coefficients:
+
+```{r}
+coef_out <- coef(lmm3)
+coef_out$subject
+```
+
+Is this model better than the model with just a random intercept? One way to assess this is with selection criteria such as AIC or BIC. These are basically measures of well the model would fit new data. Lower values mean a better "fit". An AIC/BIC value by itself doesn't mean much. But if we have multiple AIC/BIC values from different models fit to the same data with the same response, we can use them to help us select a "preferred" model.
+
+AIC stands for Akaike Information Criterion. BIC stands for Bayesian Information Criterion. Each can be obtained using `AIC()` or `BIC()`, respectively. The df column in the output refers to degrees of freedom. That's the number of parameters our model estimated. More parameters means a more complicated model. 
+
+```{r}
+AIC(lmm2, lmm3)
+```
+
+```{r}
+BIC(lmm2, lmm3)
+```
+
+In both cases it seems like the random effect for weeks is justified. 
+
+In this updated model the intercept and weeks random effects are correlated. We can extract just the random effect variance estimates with the `VarCorr()` function,
+
+```{r}
+VarCorr(lmm3)
+```
+
+If we like we can fit a model with no correlation between random effects. To do this we use two pipes in the random effects formula: `(weeks || subject)`
+
+```{r}
+lmm4 <- lmer(wt ~ treat * weeks + (weeks || subject), data=ratdrink)
+VarCorr(lmm4)
+```
+
+How does this model compare to the model with correlated random effects?
+
+```{r}
+AIC(lmm3, lmm4)
+```
+
+It seems slightly better, though that may be due to the sample. Probably doesn't make a difference. 
+
+## CODE ALONG 3
+
+```{r}
+lmm5 <- lmer(wt ~ weeks * treat + (treat | subject), data = ratdrink)
+summary(lmm5)
+
+lmm5 <- lmer(wt ~ weeks * treat + (treat || subject), data = ratdrink)
+summary(lmm5)
+
+
+lmm5 <- lmer(wt ~ weeks * treat + (0 + treat || subject), data = ratdrink)
+summary(lmm5)
+```
+
+
+## Edited for time
+
+
+Another approach is to plot observed versus fitted values by subject. This is sometimes called a "calibration plot." A good model should return values with close to a 1:1 correspondence. It looks like some are ok, but others curve around the line.
+
+```{r}
+plot(lmm1, wt ~ fitted(.) | subject, abline = c(0,1))
+```
