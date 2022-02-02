@@ -458,21 +458,71 @@ It seems slightly better, though that may be due to the sample. Probably doesn't
 
 ## CODE ALONG 3
 
+1. Fit a model with the random effect on weeks but not on the intercept: `(0 + weeks | subject)`. Call the model lmm5.
+
 ```{r}
-lmm5 <- lmer(wt ~ weeks * treat + (treat | subject), data = ratdrink)
-summary(lmm5)
-
-lmm5 <- lmer(wt ~ weeks * treat + (treat || subject), data = ratdrink)
-summary(lmm5)
-
-
-lmm5 <- lmer(wt ~ weeks * treat + (0 + treat || subject), data = ratdrink)
+lmm5 <- lmer(wt ~ treat * weeks + (0 + weeks | subject), data = ratdrink)
 summary(lmm5)
 ```
+
+2. How does this model compare to `lmm3`, which has a random effect on both intercept and weeks?
+
+```{r}
+AIC(lmm5, lmm3)
+```
+
+## Making comparisons
+
+Let's say we're happy with model `lmm3`. It's good enough. How can we use that model to make comparisons between treatments? How can we compare trends over time between treatments?
+
+A package that is useful for this is the **emmeans** package.
+
+```{r}
+library(emmeans)
+emmeans(lmm3, pairwise ~ treat, at = (list(weeks = 4)))
+
+```
+
+
+```{r}
+emmeans(lmm3, pairwise ~ treat, at = (list(weeks = 4))) |>
+  confint()
+```
+
+
+```{r}
+emtrends(lmm3, pairwise ~ treat, var = "weeks")
+```
+
+```{r}
+emtrends(lmm3, pairwise ~ treat, var = "weeks") |>
+  confint()
+```
+
 
 
 ## Edited for time
 
+Compare thiouracil and thyroxine at week 4.
+
+```{r}
+nd1 <- data.frame(treat="thiouracil", weeks=4)
+nd2 <- data.frame(treat="thyroxine", weeks=4)
+b.out <- bootMer(x = lmm3, 
+                 FUN = function(x){
+                   predict(x, newdata = nd1, re.form=NA) -
+                     predict(x, newdata = nd2, re.form=NA)}, 
+                 nsim = 100, 
+                 .progress = "txt")
+
+```
+
+
+```{r}
+head(b.out$t)
+quantile(b.out$t, probs = c(0.025, 0.5, 0.975))
+```
+                 
 
 Another approach is to plot observed versus fitted values by subject. This is sometimes called a "calibration plot." A good model should return values with close to a 1:1 correspondence. It looks like some are ok, but others curve around the line.
 
