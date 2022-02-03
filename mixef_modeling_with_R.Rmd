@@ -447,7 +447,7 @@ VarCorr(lmm3)
 
 The correlation estimate is small, only -0.133. Correlated random effects in this case means that subjects' random effects on the intercept and weeks coefficients are associated. For example, if one subject has a large random effect on the intercept, they may have a large random effect on the weeks coefficient. 
 
-If we like we can fit a model with no correlation between random effects. To do this we use two pipes in the random effects formula: `(weeks || subject)`
+If we like we can fit a model with no correlation between random effects. To do this we use two pipes in the random effects formula: `(weeks || subject)`. (This only works for numeric predictors.)
 
 ```{r}
 lmm4 <- lmer(wt ~ treat * weeks + (weeks || subject), data=ratdrink)
@@ -483,14 +483,15 @@ Let's say we're happy with model `lmm3`. It's good enough. How can we use that m
 
 A package that is useful for this is the **emmeans** package. That's short for Estimated Marginal Means. emmeans is a large and powerful package. We show two basic uses in this example.
 
-It appears at week 4, the end of the observation period, rats on thiouracil weigh less than rats on the other two treatments. How much less? We use the `emmeans()` function to analyze this. It takes a fitted model as the first argument. The second argument uses emmeans syntax to specify we want pairwise comparisons between all three treatments. The `at` argument allows us to specify at what time point we want to make the comparisons. Notice this needs to be a data frame. The note about results being misleading can be ignored. 
+It appears at week 4, the end of the observation period, rats on thiouracil weigh less than rats on the other two treatments. How much less? We use the `emmeans()` function to analyze this. It takes a fitted model as the first argument. The second argument uses emmeans syntax to specify we want `pairwise` comparisons between all three treatments. The `at` argument allows us to specify at what time point we want to make the comparisons. Notice this needs to be a data frame. The note about results being misleading can be ignored. 
 
 ```{r}
 emmeans(lmm3, pairwise ~ treat, at = (data.frame(weeks = 4)))
-
 ```
 
-The first section returns the estimated mean weight for each treatment at week 4. The second section compares those weights. The mean weight for rats on thiouracil is 126. That's about 32 grams less than the control and thyroxine groups. Those differences appear to be signficant judging by p-values. Probably better to look at confidence intervals. Below we pipe the previous result into `confint()`.
+The first section returns the estimated mean weight for each treatment at week 4. The second section compares those weights. The mean weight for rats on thiouracil is 126. That's about 32 grams less than the control and thyroxine groups. Those differences appear to be significant judging by p-values. NOTE: The p-values are approximate. Recall we can't precisely calculate p-values for mixed-effect models with unbalanced groups. The Kenward-Roger method is one approach for obtaining approximate p-values.
+
+Probably better to look at confidence intervals. Below we pipe the previous result into `confint()`.
 
 ```{r}
 emmeans(lmm3, pairwise ~ treat, at = (list(weeks = 4))) |>
@@ -514,10 +515,70 @@ emtrends(lmm3, pairwise ~ treat, var = "weeks") |>
 
 The difference in trend looks to be at least 5 between thioruacil and the other two groups.
 
+## Simulation and Bootstrapping
 
-## Edited for time
+If our mixed-effect model is good, it should generate data similar to our observed data. The `simulate()` function allows us to use our model to rapidly generate new responses using our model. We can then compare the distribution of the model generated responses to the distribution of our observed response data. 
 
-Compare thiouracil and thyroxine at week 4.
+Let's try `lmm3`.
+
+```{r}
+sim1 <- simulate(lmm3, nsim = 50)
+plot(density(ratdrink$wt))
+for(i in 1:50)lines(density(sim1[[i]]), col = "grey80")
+```
+
+Let's try a "bad" model. Below we fit a model that doesn't take treat into account.
+
+```{r}
+lmmX <- lmer(wt ~ weeks + (1|subject), data = ratdrink)
+```
+
+Simulate wt using the model and overlay the model generated distributions on top of the observed distribution. 
+
+```{r}
+sim2 <- simulate(lmmX, nsim = 50)
+plot(density(ratdrink$wt))
+for(i in 1:50)lines(density(sim2[[i]]), col = "grey80")
+```
+
+It doesn't look horrible, but in the 100 - 200 range the observed data does not seem consistent with the model generated data.
+
+Bootstrapping involves _resampling_ our data with replacement, calculating some statistic, repeating many times, and using the results to approximate a confidence interval. One reason we might want to do this for mixed-effect models is that the usual `predict` method does not compute standard errors.
+
+Here's a quick demo of bootstrapping using toy data. Say we want a bootstrap confidence interval.
+
+```{r}
+# toy data
+x <- c(4, 8, 9, 3, 6, 5, 7)
+```
+
+1. resample with replacement.
+
+```{r}
+x1 <- sample(x, replace = TRUE)
+```
+
+2. calculate the statistic.
+
+```{r}
+b1 <- mean(x1)
+```
+
+3. repeat steps 2 and 3 many times to get "bootstrap replicates". We can do that with the `replicate()` function.
+
+```{r}
+B <- replicate(n = 1000, expr = {mean(sample(x, replace = TRUE))})
+```
+
+4. Use bootstrap replicates to get a confidence interval using quantiles.
+
+```{r}
+quantile(B, probs = c(0.025, 0.975))
+```
+
+To do this with an `lmer()` model we use the `bootMer()` function.
+
+Let's say we want to calculate a bootstrap confidence interval on the difference in means between thiouracil and thyroxine at week 4 using our `lmm3` model.
 
 ```{r}
 nd1 <- data.frame(treat="thiouracil", weeks=4)
@@ -537,9 +598,3 @@ head(b.out$t)
 quantile(b.out$t, probs = c(0.025, 0.5, 0.975))
 ```
                  
-
-Another approach is to plot observed versus fitted values by subject. This is sometimes called a "calibration plot." A good model should return values with close to a 1:1 correspondence. It looks like some are ok, but others curve around the line.
-
-```{r}
-plot(lmm1, wt ~ fitted(.) | subject, abline = c(0,1))
-```
