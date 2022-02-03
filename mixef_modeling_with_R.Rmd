@@ -28,6 +28,7 @@ We're going to use the following packages in this workshop. Let's load them.
 library(lme4)
 library(ggplot2)
 library(ggeffects)
+library(emmeans)
 ```
 
 
@@ -59,6 +60,8 @@ Now let's fit a simple linear model, or regression line, using the correct model
 m <- lm(y ~ x, data = d)
 summary(m)
 ```
+
+This is one way to think of linear modeling or regression: we try to recover the process that generated the data.
 
 Assuming our data came from a function of the form _y = a + b*x_ with noise sampled from a Normal distribution, the model estimates a as 2.7468 and b as 2.0821. Those are fairly close to the true values of 3 and 2. The noise is estimated to be from a Normal distribution with mean 0 and standard deviation 1.214 (Residual standard error). Again close to the true value of 1.5.
 
@@ -119,9 +122,9 @@ ggplot(d2) +
   geom_smooth(method = "lm", se = FALSE)
 ```
 
-How do we "work backwards" and recover the true intercept, slope and two random effect parameters?
+How do we "work backwards" as we did the simple linear model and recover the true intercept, slope and two random effect parameters?
 
-**linear mixed-effect models, or multilevel models**
+**linear Mixed-Effect Models, or Multilevel Models**
 
 Because we are dealing with models with a mix of fixed and random effects, we sometimes call these **Mixed-Effect Models**. Another name is **Multilevel Models** because we're dealing with different levels of observations. (eg, we observe 7 subjects, but also observe 10 observations on each subject.)
 
@@ -167,9 +170,9 @@ Check constant variance for Subjects (aka, between subjects). Boxplots should be
 plot(me1, id ~ resid(.))
 ```
 
-We may also want to assess that the variance (noise) comes from a Normal distribution. We need to use a function in the lattice package called `qqmath()`. (The lattice package comes with R.)
+To assess that the variance (noise) comes from a Normal distribution, we need to use a function in the lattice package called `qqmath()`. (The lattice package comes with R.)
 
-Remember we have two sources of variation (or random effects): Residuals (within subjects) and id (between subjects). To check Residual normality, we use the `qqmath()` function in the lattice package. The points should lie close to the diagonal line.
+Remember we have two sources of variation (or random effects): Residuals (within subjects) and id (between subjects). To check Residual normality, we use the `qqmath()` function in the lattice package. The points should lie close to the diagonal line. The syntax `lattice::` allows us to access the function from the package without loading the package.
 
 ```{r}
 lattice::qqmath(me1)
@@ -189,12 +192,13 @@ The model also tries to estimate those values as well. We can see them using the
 ranef(me1)
 ```
 
-This is similar to the previous plot but only has 7 points (one for each subject). It also has a +/- 1 standard deviation bar to give some sense of the uncertainty in the estimate of each subject's random effect. We'd like those points to roughly form a diagonal line.
+Feed the output of that function to `qqmath`.
 
 ```{r}
 lattice::qqmath(ranef(me1))
 ```
 
+This is similar to the previous plot but only has 7 points (one for each subject). It also has a +/- 1 standard deviation bar to give some sense of the uncertainty in the estimate of each subject's random effect. We'd like those points to roughly form a diagonal line.
 
 ## Using our model for predictions
 
@@ -225,14 +229,14 @@ predict(me1, newdata = data.frame(x = 3, id = 1:7))
 
 From the lme4 documentation for predict: "There is no option for computing standard errors of predictions because it is difficult to define an efficient method that incorporates uncertainty in the variance parameters." That means we cannot simply ask for confidence intervals for our predictions. We can however use the bootstrap. (see below)
 
-We can also visualize this model with ggeffects. By default it assumes predictions do not make use of random effects.
+We can also visualize this model with ggeffects. By default it assumes predictions do not make use of random effects. Below we use `ggpredict` to make predictions for various values of x, and pipe the result into `plot`. The `add.data` argument adds the raw data to the plot.
 
 ```{r}
 ggpredict(me1, terms = "x") |>
   plot(add.data = TRUE)
 ```
 
-To incorporate the additional uncertainty, we set `type = "random"` (for "random effects"). Notice the confidence ribbon is much wider.
+To incorporate the additional uncertainty due to each subject's random effect, we set `type = "random"` (for "random effects"). Notice the confidence ribbon is much wider.
 
 ```{r}
 ggpredict(me1, terms = "x", type = "random") |>
@@ -324,7 +328,7 @@ summary(lmm1, corr=FALSE) # suppress "Correlation of Fixed Effects"
 Naive interpretation:
 
 - Rats gain about 23 grams per week
-- mean weight at week 0 for control group is about 59
+- mean weight at week 0 for control group is about 59 (Intercept)
 - mean weight at week 0 for thiouracil group is about 59 - 13
 - mean weight at week 0 for thyroxine group is about 59 + 0.5
 
@@ -403,7 +407,7 @@ confint(lmm2, oldNames = FALSE)
 
 ## Comparing models
 
-We have many options when building a mixed-effect model. In addition to what predictors to include and whether they should interact, we get decide how many random effects to allow. The previous model allowed for one random effect on the intercept. 
+We have many options when building a mixed-effect model. In addition to what predictors to include and whether they should interact, we get to decide how many random effects to allow. The previous model allowed for one random effect on the intercept. 
 
 Let's allow a random effect on weeks as well. This says the effect of weeks is conditional on each rat. (This may not be correct.)
 
@@ -414,7 +418,7 @@ summary(lmm3, corr = FALSE)
 
 Under Random Effects we have three estimates of "noise" or variance. We can think of those values as the standard deviations of Normal distributions (with mean 0) from which random values were drawn. Notice also the random effects for the intercept and weeks are assumed to be correlated. 
 
-If we look at the coefficients, each rat now has their own intercept and weeks coefficients:
+If we look at the coefficients, each rat now has their own intercept and weeks coefficients. 
 
 ```{r}
 coef_out <- coef(lmm3)
@@ -433,13 +437,15 @@ AIC(lmm2, lmm3)
 BIC(lmm2, lmm3)
 ```
 
-In both cases it seems like the random effect for weeks is justified. 
+In both cases it looks like `lmm3` is the better model. It seems the random effect for weeks is justified. 
 
-In this updated model the intercept and weeks random effects are correlated. We can extract just the random effect variance estimates with the `VarCorr()` function,
+In this updated model the intercept and weeks random effects are _assumed to be correlated_. We can extract just the random effect variance estimates with the `VarCorr()` function. This is the portion presented in the Random Effects section of the summary output. 
 
 ```{r}
 VarCorr(lmm3)
 ```
+
+The correlation estimate is small, only -0.133. Correlated random effects in this case means that subjects' random effects on the intercept and weeks coefficients are associated. For example, if one subject has a large random effect on the intercept, they may have a large random effect on the weeks coefficient. 
 
 If we like we can fit a model with no correlation between random effects. To do this we use two pipes in the random effects formula: `(weeks || subject)`
 
@@ -473,32 +479,40 @@ AIC(lmm5, lmm3)
 
 ## Making comparisons
 
-Let's say we're happy with model `lmm3`. It's good enough. How can we use that model to make comparisons between treatments? How can we compare trends over time between treatments?
+Let's say we're happy with model `lmm3`. It's good enough. How can we use that model to make comparisons between treatments at certain times? How can we compare trends over time between treatments?  
 
-A package that is useful for this is the **emmeans** package.
+A package that is useful for this is the **emmeans** package. That's short for Estimated Marginal Means. emmeans is a large and powerful package. We show two basic uses in this example.
+
+It appears at week 4, the end of the observation period, rats on thiouracil weigh less than rats on the other two treatments. How much less? We use the `emmeans()` function to analyze this. It takes a fitted model as the first argument. The second argument uses emmeans syntax to specify we want pairwise comparisons between all three treatments. The `at` argument allows us to specify at what time point we want to make the comparisons. Notice this needs to be a data frame. The note about results being misleading can be ignored. 
 
 ```{r}
-library(emmeans)
-emmeans(lmm3, pairwise ~ treat, at = (list(weeks = 4)))
+emmeans(lmm3, pairwise ~ treat, at = (data.frame(weeks = 4)))
 
 ```
 
+The first section returns the estimated mean weight for each treatment at week 4. The second section compares those weights. The mean weight for rats on thiouracil is 126. That's about 32 grams less than the control and thyroxine groups. Those differences appear to be signficant judging by p-values. Probably better to look at confidence intervals. Below we pipe the previous result into `confint()`.
 
 ```{r}
 emmeans(lmm3, pairwise ~ treat, at = (list(weeks = 4))) |>
   confint()
 ```
 
+It appears that rats on thiouracil can be expected to weigh at least 15 grams less than the other two groups at 4 weeks.
+
+To compare the trends (or slopes) over time, we use the `emtrends()` function. The syntax is almost the same as before, except this time we use the `var` argument to specify the x-axis of the trend line. In this case it's weeks.
 
 ```{r}
 emtrends(lmm3, pairwise ~ treat, var = "weeks")
 ```
+
+The trend or slope of thiouracil appears to be about 10 units less than the other two groups: 17 versus 27. That difference appears to be significant according to p-values. Again we can pipe the result into `confint()` to get confidence intervals.
 
 ```{r}
 emtrends(lmm3, pairwise ~ treat, var = "weeks") |>
   confint()
 ```
 
+The difference in trend looks to be at least 5 between thioruacil and the other two groups.
 
 
 ## Edited for time
