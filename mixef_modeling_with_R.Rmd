@@ -576,3 +576,30 @@ quantile(b.out$t, probs = c(0.025, 0.975))
 ```
 
 The confidence interval returned by emmeans was [-53.9, -15.2]. Recall the emmeans method used the Kenward-Roger approximation. The `bootMer()` confidence interval is a good deal smaller. 
+
+## CODE ALONG 4
+
+What's the difference in expected weight at week 4 versus week 3 for rats on thiouracil? Use `bootMer()` to calculate a confidence interval on the difference using the `lmm3` model.
+
+Here's how we get one estimate using `predict()`
+
+```{r}
+nd <- data.frame(treat = "thiouracil", weeks = 3:4)
+# diff(x1, x2) = x2 - x1
+diff(predict(lmm3, newdata = nd, re.form = NA))
+```
+
+Now use `bootMer()` to perform this 100 times using newly fitted models from simulated responses. Save the result to `b.out2`. When done, use the quantile function to get an approximate confidence interval.
+
+```{r}
+b.out2 <- bootMer(lmm3, 
+                  FUN = function(x){
+                    diff(predict(x, newdata = nd, re.form = NA))
+                    },
+                  nsim = 100, .progress = "txt")
+```
+
+```{r}
+quantile(b.out2$t, probs = c(0.025, 0.975))
+```
+
