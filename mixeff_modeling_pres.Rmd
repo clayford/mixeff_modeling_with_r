@@ -1,20 +1,13 @@
 ---
-title: "Linear Mixed-Effect Modeling in R"
+title: "Linear Mixed-Effect Modeling with R"
 author: "Clay Ford"
-date: "Spring 2018"
-output: 
-    beamer_presentation: 
-        fig_caption: false
+date: "spring 2022"
+output: slidy_presentation
 ---
 
-## Agenda
-
-- Conceptual overview of mixed-effect models
-- How to implement in R
-- How to assess significance of parameters
-- Diagnostics
-- Predictions
-- Model selection
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
 
 ## What are Linear Mixed-Effect Models?
 
@@ -387,9 +380,6 @@ Once we fit a model, `lme4` has several functions for extracting and viewing mod
 - `VarCorr()` - estimated variance parameters, $\boldsymbol{D}$ and $\boldsymbol{R_i}$
 - `resid()` - residuals, or estimated random errors, $\epsilon_i$
 
-In addition, the function `plot(allEffects())` from the `effects` package can quickly help us visualize the model.
-
-Let's go to R!
 
 ## Why no p-values in the `lme4` summaries?
 
@@ -404,7 +394,7 @@ In LME models, the null reference distribution is technically not known, at leas
 
 Quick, common-sense way: look at the `t value`.
 
-If absolute value of `t value` is greater than 2, then the coefficient is likely significant. In other words, the coefficient estimate is more than 2 standard errors away from 0.
+If absolute value of `t value` is greater than 3, then the coefficient is likely significant. In other words, the coefficient estimate is more than 3 standard errors away from 0.
 
 Note:    
 `t value` = `Estimate` / `Std. Error`
@@ -439,7 +429,6 @@ summary(m)
 
 A column of p-values is included in the summary output. Again, they're *approximate*.
 
-Let's go back to R!
 
 ## Diagnostic plots
 
@@ -495,7 +484,6 @@ Also known as a caterpillar plot. Good for checking if there are levels of a gro
 
 Points lying on a diagonal line can provide indication of a good model fit.
 
-Let's go back to R!
 
 ## Making predictions using model
 
@@ -541,7 +529,6 @@ quantile(b.out$t, probs = c(0.025, 0.975))
 
 ```
 
-Let's go back to R!
 
 ## REML vs. ML
 
@@ -586,7 +573,7 @@ The null hypothesis states the models are equal. Rejecting the null means we pre
 AIC (Akaike Information Criterion) is a criterion-based approach to model building. It is a measure of "goodness" we try to optimize. We want to minimize AIC.
 
 To see AIC:   
-`extractAIC(lme1)`    
+`AIC(lme1)`    
 
 Among several models, the one with lower AIC is usually preferred. This approach requires _no hypothesis testing_, involves no p-values, and doesn't care whether you used REML or ML. 
 
@@ -612,8 +599,6 @@ A likelihood ratio test (LRT) statistic has a chi-square distribution with degre
 Let's say our LRT is on 2 degrees of freedom. The null distribution of this test statistic is NOT a chi-square with 2 degrees of freedom since our null value (variance = 0) is on the boundary of the parameter space.
 
 It's been suggested that a 50:50 mixture, $0.5\chi_{df}^{2} + 0.5\chi_{df-1}^{2}$, can serve as a reference null distribution for computing the p-value. But this is still only an approximation.
-
-We'll demonstrate this in the R script. Let's go!
 
 
 
@@ -641,4 +626,6 @@ Sign up for more workshops or see past workshops:
 http://data.library.virginia.edu/training/
 
 Register for the Research Data Services newsletter: http://data.library.virginia.edu/newsletters/
+
+
 

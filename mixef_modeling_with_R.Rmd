@@ -45,7 +45,7 @@ plot(y ~ x, data = d)
 ```
 
 
-Now let's add some noise to each observation. We'll use 10 random draws from a Normal distribution with mean 0 and standard deviation of 1.5. The `set.seed(1)` function ensures we all draw the same values. Now y looks associated with x, but not completely determined by x. We might say each observation has a _random effect_.
+Now let's add some noise to each observation. We'll use 10 random draws from a Normal distribution with mean 0 and standard deviation of 1.5. The `set.seed(1)` function ensures we all draw the same values. Now y looks associated with x, but not completely determined by x. We might say there is a _random effect_ associated with each observation.
 
 ```{r}
 set.seed(1)
@@ -122,9 +122,9 @@ ggplot(d2) +
   geom_smooth(method = "lm", se = FALSE)
 ```
 
-How do we "work backwards" as we did the simple linear model and recover the true intercept, slope and two random effect parameters?
+How do we "work backwards" as we did with the simple linear model and recover the true intercept, slope and two random effect parameters?
 
-**linear Mixed-Effect Models, or Multilevel Models**
+**Linear Mixed-Effect Models, or Multilevel Models**
 
 Because we are dealing with models with a mix of fixed and random effects, we sometimes call these **Mixed-Effect Models**. Another name is **Multilevel Models** because we're dealing with different levels of observations. (eg, we observe 7 subjects, but also observe 10 observations on each subject.)
 
@@ -136,7 +136,7 @@ me1 <- lmer(y ~ x + (1|id), data = d2)
 summary(me1)
 ```
 
-The _Fixed Effects_ section says that assuming this data came from a straight line model with an intercept and slope, the model estimates the intercept to be 2.65 and the slope to be 1.97. These are very close to the true values of 3 and 2. 
+The _Fixed Effects_ section says that assuming this data came from a straight line model with an intercept and slope, the model estimates the intercept to be 2.65 and the slope to be 1.97. These are close to the true values of 3 and 2. 
 
 The _Random Effects_ section reports two standard deviations: one for id and and one called "Residual". The first is the estimate of the standard deviation of the normal distribution from which the subject-specific noise was drawn: 1.157. The second is the estimate of the standard deviation of the normal distribution from which the residual noise was drawn: 1.795. Recall the true values were 2 and 1.5, respectively. 
 
@@ -146,8 +146,28 @@ If we look at the coefficients of this model, notice everyone got their _own int
 coef(me1)
 ```
 
+We can extract each subject's estimated random effect with the `ranef()` function.
 
-This is one way to think of mixed-effect/multilevel modeling: _trying to work backward to determine the data generation process_. Our example was simple and we knew the data generating process because we simulated the data. In real life we never know if our model is correct (spoiler: it never is) and the data generating process is complicated.
+```{r}
+ranef(me1)
+```
+
+This is the model's effort to estimate the subject-specific noise we generated, `subj_noise`.
+
+We add these random effects to the intercept fixed effect to get each subject's random intercept. See the fixed effects with the `fixef()` function.
+
+```{r}
+fixef(me1)
+```
+
+Add the random effects to the intercept to get each subject's intercept. This matches the `coef()` output above.
+
+```{r}
+fixef(me1)[1] + ranef(me1)$id
+```
+
+This is one way to think of mixed-effect/multilevel modeling: trying to work backward to determine the data generation process. Our example was simple and we knew the data generating process because we simulated the data. In real life we never know if our model is correct (spoiler: it never is) and the data generating process is complicated.
+
 
 ## Checking assumptions
 
@@ -164,7 +184,7 @@ Check constant variance for Residuals (aka, within subjects). Points should be e
 plot(me1)
 ```
 
-Check constant variance for Subjects (aka, between subjects). Boxplots should be evenly scattered around 0 for each subject.
+Check constant variance for Subjects (aka, between subjects). Boxplots should be evenly scattered around 0 for each subject. The syntax `id ~ resid(.)` means plot residuals by subject id. 
 
 ```{r}
 plot(me1, id ~ resid(.))
@@ -186,7 +206,7 @@ Remember the subject random effects we generated: `subj_noise`?
 subj_noise
 ```
 
-The model also tries to estimate those values as well. We can see them using the `ranef()` function.
+The model also tries to estimate those values as well. Again, we can see them using the `ranef()` function.
 
 ```{r}
 ranef(me1)
@@ -227,7 +247,7 @@ To make a prediction for each subject _using their random intercept_, we drop th
 predict(me1, newdata = data.frame(x = 3, id = 1:7))
 ```
 
-From the lme4 documentation for predict: "There is no option for computing standard errors of predictions because it is difficult to define an efficient method that incorporates uncertainty in the variance parameters." That means we cannot simply ask for confidence intervals for our predictions. We can however use the bootstrap. (see below)
+From the lme4 documentation for predict: "There is no option for computing standard errors of predictions because it is difficult to define an efficient method that incorporates uncertainty in the variance parameters." That means we cannot simply ask for confidence intervals for our predictions. We can however use the bootstrap. (see _Using Simulation with Mixed-Effect Models section_ below)
 
 We can also visualize this model with ggeffects. By default it assumes predictions do not make use of random effects. Below we use `ggpredict` to make predictions for various values of x, and pipe the result into `plot`. The `add.data` argument adds the raw data to the plot.
 
@@ -257,7 +277,8 @@ ggpredict(me1, terms = c("x", "id"), type = "random") |>
 Run the following code to load a new data set. 
 
 ```{r}
-d3 <- read.csv("data/d.csv")
+URL <- "https://raw.githubusercontent.com/clayford/mixeff_modeling_with_r/main/data/d.csv"
+d3 <- read.csv(URL)
 d3$id <- as.character(d3$id)
 str(d3)
 ```
@@ -266,20 +287,46 @@ Add new R code chunks by clicking the *Insert Chunk* button on the toolbar or by
 
 1. Visualize the data using ggplot2. Group by id.
 
+```{r}
+ggplot(d3) +
+  aes(x = x, y = y, color = id) +
+  geom_point() +
+  geom_line()
+```
+
 
 2. Model y as a function of x with a random intercept conditional on id. Call the model `me3`.
+
+```{r}
+me3 <- lmer(y ~ x + (1|id), data = d3)
+```
 
 
 3. Check the constant variance assumption for the observations. What do you think?
 
+```{r}
+plot(me3)
+```
+
 
 4. Now fit a model that assumes the subject exerts a random effect on both the intercept and slope, using the formula `y ~ x + (x|id)`. Call the model `me4`.
 
+```{r}
+me4 <- lmer(y ~ x + (x|id), data = d3)
+```
 
-5. Check the assumption of constant variance for the observation random effect again. What do you think?
 
+5. Check the assumption of constant variance for the observation random effect for `me4`. What do you think?
 
-6. Plot the fitted model _for each subject_ using ggeffects.
+```{r}
+plot(me4)
+```
+
+6. View the coefficients of `me4`. Notice each subject has their own intercept and slope.
+
+```{r}
+coef(me4)
+```
 
 
 
@@ -287,10 +334,11 @@ Add new R code chunks by clicking the *Insert Chunk* button on the toolbar or by
 
 Let's look at some realistic data.
 
-The following data consist of 5 weekly measurements of body weight for 27 rats. 10 rats are on a control treatment. 7 rats have thyroxine added to their drinking water. 10 rats have thiouracil added to their water. We're interested in how the treatments affect the weight of the rats. Source: faraway package (Faraway, 2006)
+The following data consist of 5 weekly measurements of body weight for 27 rats. 10 rats were on a control treatment. 7 rats has thyroxine added to their drinking water. 10 rats had thiouracil added to their water. We're interested in how the treatments affected the weight of the rats. Source: faraway package (Faraway, 2006)
 
 ```{r}
-ratdrink <- read.csv("data/ratdrink.csv")
+URL2 <- "https://raw.githubusercontent.com/clayford/mixeff_modeling_with_r/main/data/ratdrink.csv"
+ratdrink <- read.csv(URL2)
 ratdrink$subject <- as.character(ratdrink$subject)
 str(ratdrink)
 ```
@@ -327,12 +375,12 @@ summary(lmm1, corr=FALSE) # suppress "Correlation of Fixed Effects"
 
 Naive interpretation:
 
-- Rats gain about 23 grams per week
+- Rats gain about 23 grams per week (weeks coefficient)
 - mean weight at week 0 for control group is about 59 (Intercept)
 - mean weight at week 0 for thiouracil group is about 59 - 13
 - mean weight at week 0 for thyroxine group is about 59 + 0.5
 
-Is this model any good? One way to check is to simply check the constant variance assumption of the Residuals. This doesn't look good.
+Is this model any good? One way to check is to simply check the constant variance assumption of the Residuals. This doesn't look good, at least not for low and high fitted values.
 
 ```{r}
 plot(lmm1)
@@ -345,9 +393,11 @@ ggpredict(lmm1, terms = c("weeks", "treat")) |>
   plot(ci = FALSE, add.data = TRUE)
 ```
 
+It appears we may need to let the trajectory over weeks vary by treatment. We can do that with an interaction.
+
+
 ## CODE ALONG 2
 
-It appears the effect of weeks may depend on treat. 
 
 1. Let's fit a model with an interaction between treat and weeks, and let's leave the intercept conditional on subject. Call the model `lmm2`
 
@@ -387,7 +437,7 @@ summary(lmm2, corr = FALSE)
 
 Since we have interactions, it takes some work to interpret the coefficients.
 
-- The `Intercept` is the expected weight of a rat at week 0 is the control group: about 52.8 grams
+- The `Intercept` is the expected weight of a rat at week 0 in the control group: about 52.8 grams
 - The `weeks` coefficient is the expected amount of weight in grams a rat in the control group adds each week: about 26.5 grams.
 
 - The `treatthiouracil` coefficient is what we _add_ to the `Intercept` to get the expected weight of a rat at week 0 is the thiouracil group: about 52.8 + 4.8 = 57.6 grams
@@ -397,7 +447,7 @@ The same calculations can be done for the thyroxine coefficients.
 
 The "Std. Error" column quantifies the uncertainty in the coefficient. The "t value" is the ratio Estimate/Std. Error. A t value greater than about 3 in absolute value provides evidence the estimated coefficient is different from 0. In other words, it's more than three standard errors away from 0.
 
-_Where are the p-values?_ In mixed-effect models the distribution of t values for the null hypothesis is not known, at least not for unbalanced data. P-values can be approximated, but not calculated precisely. The `lme4` authors elected to not output p-values. Probably better to look at confidence intervals anyway.
+_Where are the p-values?_ In mixed-effect models the distribution of t values for the null hypothesis is not known, at least not for unbalanced data. P-values can be approximated, but not calculated precisely. The `lme4` authors elected to not output p-values. Probably better to look at confidence intervals anyway. (See _Appendix_ for a package that outputs p-values, **lmerTest**)
 
 We can get confidence intervals for the coefficients by using the `confint` function. Notice we get confidence intervals for the random effect estimates as well. Setting `oldNames = FALSE` returns more informative names for the random effects.
 
@@ -425,9 +475,9 @@ coef_out <- coef(lmm3)
 coef_out$subject
 ```
 
-Is this model better than the model with just a random intercept? One way to assess this is with selection criteria such as AIC or BIC. These are basically measures of well the model would fit new data. Lower values mean a better "fit". An AIC/BIC value by itself doesn't mean much. But if we have multiple AIC/BIC values from different models fit to the same data with the same response, we can use them to help us select a "preferred" model.
+Is this model better than the model with just a random intercept? One way to assess this is with selection criteria such as AIC or BIC. These are basically measures of how well the model would fit new data. Lower values mean a better "fit". An AIC/BIC value by itself doesn't mean much. But if we have multiple AIC/BIC values from different models fit to the same data with the same response, we can use them to help us select a "preferred" model.
 
-AIC stands for Akaike Information Criterion. BIC stands for Bayesian Information Criterion. Each can be obtained using `AIC()` or `BIC()`, respectively. The df column in the output refers to degrees of freedom. That's the number of parameters our model estimated. More parameters means a more complicated model. 
+AIC stands for Akaike Information Criterion. BIC stands for Bayesian Information Criterion. (See Appendix of this document for more information.) Each can be obtained using `AIC()` or `BIC()`, respectively. The df column in the output refers to degrees of freedom. That's the number of parameters our model estimated. More parameters means a more complicated model. 
 
 ```{r}
 AIC(lmm2, lmm3)
@@ -464,7 +514,7 @@ It seems slightly better, though that may be due to the sample. Probably doesn't
 
 ## CODE ALONG 3
 
-1. Fit a model with the random effect on weeks but not on the intercept: `(0 + weeks | subject)`. Call the model lmm5.
+1. Fit a model with the random effect on weeks but not on the intercept: `(0 + weeks | subject)`. Call the model `lmm5`.
 
 ```{r}
 lmm5 <- lmer(wt ~ treat * weeks + (0 + weeks | subject), data = ratdrink)
@@ -483,10 +533,10 @@ Let's say we're happy with model `lmm3`. It's good enough. How can we use that m
 
 A package that is useful for this is the **emmeans** package. That's short for Estimated Marginal Means. emmeans is a large and powerful package. We show two basic uses in this example.
 
-It appears at week 4, the end of the observation period, rats on thiouracil weigh less than rats on the other two treatments. How much less? We use the `emmeans()` function to analyze this. It takes a fitted model as the first argument. The second argument uses emmeans syntax to specify we want `pairwise` comparisons between all three treatments. The `at` argument allows us to specify at what time point we want to make the comparisons. Notice this needs to be a data frame. The note about results being misleading can be ignored. 
+It appears at week 4, the end of the observation period, rats on thiouracil weigh less than rats on the other two treatments. How much less? We use the `emmeans()` function to analyze this. It takes a fitted model as the first argument. The second argument uses emmeans syntax to specify we want `pairwise` comparisons between all three treatments. The `at` argument allows us to specify at what time point we want to make the comparisons. Notice this needs to be a data frame. (The note about results being misleading can be ignored.)
 
 ```{r}
-emmeans(lmm3, pairwise ~ treat, at = (data.frame(weeks = 4)))
+emmeans(lmm3, pairwise ~ treat, at = data.frame(weeks = 4))
 ```
 
 The first section returns the estimated mean weight for each treatment at week 4. The second section compares those weights. The mean weight for rats on thiouracil is 126. That's about 32 grams less than the control and thyroxine groups. Those differences appear to be significant judging by p-values. NOTE: The p-values are approximate. Recall we can't precisely calculate p-values for mixed-effect models with unbalanced groups. The Kenward-Roger method is one approach for obtaining approximate p-values.
@@ -515,17 +565,21 @@ emtrends(lmm3, pairwise ~ treat, var = "weeks") |>
 
 The difference in trend looks to be at least 5 between thioruacil and the other two groups.
 
+
+
 ## Using Simulation with Mixed-Effect Models
 
 If our mixed-effect model is good, it should generate data similar to our observed data. The `simulate()` function allows us to use our model to rapidly generate new responses using our model. We can then compare the distribution of the model generated responses to the distribution of our observed response data.
 
-Let's try `lmm3`.
+Let's try `lmm3`. Below we specify 50 simulations and then use a `for` loop to plot a density curve for each simulation over the density curve of our observed data. 
 
 ```{r}
 sim1 <- simulate(lmm3, nsim = 50)
 plot(density(ratdrink$wt))
 for(i in 1:50)lines(density(sim1[[i]]), col = "grey80")
 ```
+
+That looks pretty good!
 
 Let's try a different model. Below we fit a model that doesn't take treat into account.
 
@@ -538,7 +592,7 @@ Model comparison via AIC tells us `lmm3` is better.
 ```{r}
 AIC(lmm3, lmmX)
 ```
-But in what way? Is `lmmX` necessarily bad? Let's simulate wt using the `lmmX` model and overlay the model generated distributions on top of the observed distribution. 
+But in what ways is `lmm3` better? Let's simulate wt using the `lmmX` model and overlay the model generated distributions on top of the observed distribution. 
 
 ```{r}
 sim2 <- simulate(lmmX, nsim = 50)
@@ -601,5 +655,93 @@ b.out2 <- bootMer(lmm3,
 
 ```{r}
 quantile(b.out2$t, probs = c(0.025, 0.975))
+```
+
+
+## We're done!
+
+Thanks for coming.
+
+For help and advice with statistics, contact us to set up an appointment: statlab@virginia.edu
+
+Sign up for more workshops or see past workshops:
+http://data.library.virginia.edu/training/
+
+Register for the Research Data Services newsletter: http://data.library.virginia.edu/newsletters/
+
+##References
+
+- Faraway, J. (2006). *Extending the Linear Model with R*. Chapman and Hall/CRC.
+
+- Galecki, A. and Burzykowski T. (2013). *Linear Mixed-Effect Models Using R*. Springer.
+
+- Pinheiro, J. & Bates, D. (2000). *Mixed-Effects Models in S and S-PLUS*. Springer.
+
+- West, B., Welch, K., & Galecki, A. (2015) *Linear Mixed Models*. Chapman and Hall/CRC.
+
+GLMM FAQ:   
+http://bbolker.github.io/mixedmodels-misc/glmmFAQ.html
+
+
+## Appendix
+
+### Approximate p-values with lme4
+
+The **lmerTest** package provides approximate p-values in lme4 summary output. Simply load the package and fit your model as usual.
+
+```{r}
+# install.packages("lmerTest)
+library(lmerTest)
+lmm3a <- lmer(wt ~ treat * weeks + (weeks | subject), data=ratdrink)
+summary(lmm3a, corr = FALSE)
+```
+
+
+### AIC and BIC
+AIC and BIC are basically log-likelihood measures penalized for number of model parameters. The formula is `-2*log-likelihood + k*npar`, where `npar` represents the number of parameters in the fitted model and `k` is the penalty per parameter.
+
+The AIC penalty: k = 2
+The BIC penalty: k = log(n), where n is number of observations.
+
+Result of AIC function for `lmm3`
+
+```{r}
+AIC(lmm3)
+```
+
+To calculate AIC "by hand", we use the `logLik()` function to calculate the log likelihood and then extract the `df` and `n` attributes.
+
+```{r}
+# get log-likelihood
+ll <- logLik(lmm3)
+# get npar
+npar <- attr(ll, "df")
+# get n
+n <- attr(ll, "nobs")
+
+```
+
+AIC by hand:
+
+```{r}
+-2*ll + 2 * npar
+```
+
+To strip the formatting we can wrap in `c()`
+
+```{r}
+c(-2*ll + 2 * npar)
+```
+
+BIC
+
+```{r}
+BIC(lmm3)
+```
+
+To get BIC by hand
+
+```{r}
+c(-2*ll + log(n) * npar)
 ```
 
