@@ -515,9 +515,9 @@ emtrends(lmm3, pairwise ~ treat, var = "weeks") |>
 
 The difference in trend looks to be at least 5 between thioruacil and the other two groups.
 
-## Simulation and Bootstrapping
+## Using Simulation with Mixed-Effect Models
 
-If our mixed-effect model is good, it should generate data similar to our observed data. The `simulate()` function allows us to use our model to rapidly generate new responses using our model. We can then compare the distribution of the model generated responses to the distribution of our observed response data. 
+If our mixed-effect model is good, it should generate data similar to our observed data. The `simulate()` function allows us to use our model to rapidly generate new responses using our model. We can then compare the distribution of the model generated responses to the distribution of our observed response data.
 
 Let's try `lmm3`.
 
@@ -527,13 +527,18 @@ plot(density(ratdrink$wt))
 for(i in 1:50)lines(density(sim1[[i]]), col = "grey80")
 ```
 
-Let's try a "bad" model. Below we fit a model that doesn't take treat into account.
+Let's try a different model. Below we fit a model that doesn't take treat into account.
 
 ```{r}
 lmmX <- lmer(wt ~ weeks + (1|subject), data = ratdrink)
 ```
 
-Simulate wt using the model and overlay the model generated distributions on top of the observed distribution. 
+Model comparison via AIC tells us `lmm3` is better. 
+
+```{r}
+AIC(lmm3, lmmX)
+```
+But in what way? Is `lmmX` necessarily bad? Let's simulate wt using the `lmmX` model and overlay the model generated distributions on top of the observed distribution. 
 
 ```{r}
 sim2 <- simulate(lmmX, nsim = 50)
@@ -541,44 +546,15 @@ plot(density(ratdrink$wt))
 for(i in 1:50)lines(density(sim2[[i]]), col = "grey80")
 ```
 
-It doesn't look horrible, but in the 100 - 200 range the observed data does not seem consistent with the model generated data.
+It doesn't look horrible, but in the 100 - 200 range the observed data does not seem consistent with the model generated data. The `lmm3` model with treat does a better job of capturing the variation in rats as they get heavier.
 
-Bootstrapping involves _resampling_ our data with replacement, calculating some statistic, repeating many times, and using the results to approximate a confidence interval. One reason we might want to do this for mixed-effect models is that the usual `predict` method does not compute standard errors.
+Another use for simulation is to approximate confidence intervals for predictions. Recall the usual `predict` method for `lmer()` models does not compute standard errors, and hence does not calculate confidence intervals.
 
-Here's a quick demo of bootstrapping using toy data. Say we want a bootstrap confidence interval.
+To do this we'll use the `bootMer()` function. This is like `simulate()` but goes a step further. After each simulation of new responses, a new model is refit. Once we fit a new model, we can make a prediction. We can then repeat this process many times to get many simulated predictions. We can then use all those predictions to make inference about the uncertainty of our predictions. This is referred to as a _model-based bootstrapping_. And it's probably easier to understand with a demonstration.
 
-```{r}
-# toy data
-x <- c(4, 8, 9, 3, 6, 5, 7)
-```
+Let's say we want to calculate a confidence interval on the difference in means between thiouracil and thyroxine at week 4 using our `lmm3` model. Here's one way using `bootMer()`.
 
-1. resample with replacement.
-
-```{r}
-x1 <- sample(x, replace = TRUE)
-```
-
-2. calculate the statistic.
-
-```{r}
-b1 <- mean(x1)
-```
-
-3. repeat steps 2 and 3 many times to get "bootstrap replicates". We can do that with the `replicate()` function.
-
-```{r}
-B <- replicate(n = 1000, expr = {mean(sample(x, replace = TRUE))})
-```
-
-4. Use bootstrap replicates to get a confidence interval using quantiles.
-
-```{r}
-quantile(B, probs = c(0.025, 0.975))
-```
-
-To do this with an `lmer()` model we use the `bootMer()` function.
-
-Let's say we want to calculate a bootstrap confidence interval on the difference in means between thiouracil and thyroxine at week 4 using our `lmm3` model.
+First we define two data frames, `nd1` and `nd2`, with the predictors of interest. Next we tell the `bootMer()` function to use the `lmm3` model to simulate data and then refit the model. The `FUN` argument tells `bootMer()` what to do with the newly fit model. In this case, make a prediction using our two datasets and take the difference. The `nsim` argument says do it 100 times. (We would typically do something like a 1000, but in the interest of time we do 100.). The `.progress` argument says output a text-based progress bar so we can keep tabs on progress.
 
 ```{r}
 nd1 <- data.frame(treat="thiouracil", weeks=4)
@@ -592,9 +568,11 @@ b.out <- bootMer(x = lmm3,
 
 ```
 
+When this finishes running the `b.out` object is a list with several objects. The `t` object is the vector of differences. Using the quantile function we can extract the 2.5% and 97.5% percentiles to construct a confidence interval.
 
 ```{r}
 head(b.out$t)
-quantile(b.out$t, probs = c(0.025, 0.5, 0.975))
+quantile(b.out$t, probs = c(0.025, 0.975))
 ```
-                 
+
+The confidence interval returned by emmeans was [-53.9, -15.2]. Recall the emmeans method used the Kenward-Roger approximation. The `bootMer()` confidence interval is a good deal smaller. 
