@@ -20,6 +20,11 @@ You can also press *Ctrl+Enter* (Win/Linux) or *Cmd+Return* (Mac) to run one lin
 
 Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I* (Win/Linux) or *Cmd+Option+I* (Mac).  
 
+## CODE ALONG 0
+
+Enter a new code chunk and run the code `rnorm(10)` (sample 10 randon values from a standard normal distribution.)
+
+
 ## Load packages
 
 We're going to use the following packages in this workshop. Let's load them.
@@ -83,10 +88,10 @@ Let's simulate data where we add noise to the intercept that's _specific to each
 
 
 ```{r}
-# generate 7 id numbers, 10 each
+# generate 7 id numbers, 10 each (10 obs on each "subject")
 id <- gl(n = 7, k = 10)
 
-# repeat x times
+# repeat x 7 times
 x <- rep(1:10, 7)
 
 # generate a random effect specific to each observation (n = 10 * 7)
@@ -128,10 +133,9 @@ How do we "work backwards" as we did with the simple linear model and recover th
 
 Because we are dealing with models with a mix of fixed and random effects, we sometimes call these **Mixed-Effect Models**. Another name is **Multilevel Models** because we're dealing with different levels of observations. (eg, we observe 7 subjects, but also observe 10 observations on each subject.)
 
-Below we model y as a function of x plus an intercept (1) that is conditional on id (the subject) using the `lmer()` function from the lme4 package. Notice this is the _correct model_! The y value really is a function of x plus an intercept that varies between subjects.  
+Below we model y as a function of x plus an intercept (1) that is conditional on id (the subject) using the `lmer()` function from the lme4 package. Notice this is the _correct model_! The y value really is a function of x plus an intercept that varies between subjects. The syntax `(1|id)` means "the intercept is conditional on the id." Each subject exerts a random effect on the intercept.
 
 ```{r}
-# (1|id) = intercept conditional on id
 me1 <- lmer(y ~ x + (1|id), data = d2)
 summary(me1)
 ```
@@ -140,7 +144,7 @@ The _Fixed Effects_ section says that assuming this data came from a straight li
 
 The _Random Effects_ section reports two standard deviations: one for id and and one called "Residual". The first is the estimate of the standard deviation of the normal distribution from which the subject-specific noise was drawn: 1.157. The second is the estimate of the standard deviation of the normal distribution from which the residual noise was drawn: 1.795. Recall the true values were 2 and 1.5, respectively. 
 
-If we look at the coefficients of this model, notice everyone got their _own intercept_ but has the same slope. We have essentially fit a straight line model to each subject. This is sometimes called a _random intercept model_. Each subject has a random effect associated with the intercept.
+If we look at the coefficients of this model using the `coef()` function, notice everyone got their _own intercept_ but has the same slope. We have essentially fit a straight line model to each subject. This is sometimes called a _random intercept model_. Each subject has a random effect associated with the intercept.
 
 ```{r}
 coef(me1)
@@ -249,7 +253,7 @@ predict(me1, newdata = data.frame(x = 3, id = 1:7))
 
 From the lme4 documentation for predict: "There is no option for computing standard errors of predictions because it is difficult to define an efficient method that incorporates uncertainty in the variance parameters." That means we cannot simply ask for confidence intervals for our predictions. We can however use the bootstrap. (see _Using Simulation with Mixed-Effect Models section_ below)
 
-We can also visualize this model with ggeffects. By default it assumes predictions do not make use of random effects. Below we use `ggpredict` to make predictions for various values of x, and pipe the result into `plot`. The `add.data` argument adds the raw data to the plot.
+We can also visualize this model with ggeffects. _By default it assumes predictions do NOT make use of random effects_. Below we use `ggpredict` to make predictions for various values of x, and pipe the result into `plot`. The `add.data` argument adds the raw data to the plot.
 
 ```{r}
 ggpredict(me1, terms = "x") |>
@@ -287,46 +291,25 @@ Add new R code chunks by clicking the *Insert Chunk* button on the toolbar or by
 
 1. Visualize the data using ggplot2. Group by id.
 
-```{r}
-ggplot(d3) +
-  aes(x = x, y = y, color = id) +
-  geom_point() +
-  geom_line()
-```
 
 
 2. Model y as a function of x with a random intercept conditional on id. Call the model `me3`.
 
-```{r}
-me3 <- lmer(y ~ x + (1|id), data = d3)
-```
 
 
 3. Check the constant variance assumption for the observations. What do you think?
 
-```{r}
-plot(me3)
-```
-
 
 4. Now fit a model that assumes the subject exerts a random effect on both the intercept and slope, using the formula `y ~ x + (x|id)`. Call the model `me4`.
 
-```{r}
-me4 <- lmer(y ~ x + (x|id), data = d3)
-```
 
 
 5. Check the assumption of constant variance for the observation random effect for `me4`. What do you think?
 
-```{r}
-plot(me4)
-```
+
 
 6. View the coefficients of `me4`. Notice each subject has their own intercept and slope.
 
-```{r}
-coef(me4)
-```
 
 
 
@@ -343,7 +326,7 @@ ratdrink$subject <- as.character(ratdrink$subject)
 str(ratdrink)
 ```
 
-Our data has 135 observations, but these are _not independent_. We have 27 subjects, and 5 observations on each of these subjects.
+Our data has 135 observations, but these are _not independent_. We have 27 subjects (rats), and 5 observations on each of these subjects.
 
 Let's visualize the data grouped by rat. It appears the trajectories of growth change depending on treatment.
 
@@ -399,33 +382,21 @@ It appears we may need to let the trajectory over weeks vary by treatment. We ca
 ## CODE ALONG 2
 
 
-1. Let's fit a model with an interaction between treat and weeks, and let's leave the intercept conditional on subject. Call the model `lmm2`
+1. Let's fit a model with an interaction between treat and weeks, and let's leave 
 
-```{r}
-lmm2 <- lmer(wt ~ treat * weeks + (1 | subject), data=ratdrink)
-summary(lmm2, corr = FALSE)
-```
 
 2. Is this model "good"? Check the Residual plot.
 
-```{r}
-plot(lmm2)
-```
+
 
 3. Create an effect plot using ggeffects.
 
-```{r}
-ggpredict(lmm2, terms = c("weeks", "treat")) |>
-  plot(ci = FALSE, add.data = TRUE)
-```
+
 
 4. what's the expected mean weight of a rat at week 4 for each treatment?
 
-```{r}
-g <- unique(ratdrink$treat)
-predict(lmm2, newdata = data.frame(weeks = 4, treat = g),
-        re.form = NA)
-```
+
+
 
 ## Interpreting model coefficients
 
@@ -516,16 +487,12 @@ It seems slightly better, though that may be due to the sample. Probably doesn't
 
 1. Fit a model with the random effect on weeks but not on the intercept: `(0 + weeks | subject)`. Call the model `lmm5`.
 
-```{r}
-lmm5 <- lmer(wt ~ treat * weeks + (0 + weeks | subject), data = ratdrink)
-summary(lmm5)
-```
+
+
 
 2. How does this model compare to `lmm3`, which has a random effect on both intercept and weeks?
 
-```{r}
-AIC(lmm5, lmm3)
-```
+
 
 ## Making comparisons
 
@@ -606,13 +573,22 @@ Another use for simulation is to approximate confidence intervals for prediction
 
 To do this we'll use the `bootMer()` function. This is like `simulate()` but goes a step further. After each simulation of new responses, a new model is refit. Once we fit a new model, we can make a prediction. We can then repeat this process many times to get many simulated predictions. We can then use all those predictions to make inference about the uncertainty of our predictions. This is referred to as a _model-based bootstrapping_. And it's probably easier to understand with a demonstration.
 
-Let's say we want to calculate a confidence interval on the difference in means between thiouracil and thyroxine at week 4 using our `lmm3` model. Here's one way using `bootMer()`.
+Let's say we want to calculate a confidence interval on the difference in means between thiouracil and thyroxine at week 4 using our `lmm3` model.
 
-First we define two data frames, `nd1` and `nd2`, with the predictors of interest. Next we tell the `bootMer()` function to use the `lmm3` model to simulate data and then refit the model. The `FUN` argument tells `bootMer()` what to do with the newly fit model. In this case, make a prediction using our two datasets and take the difference. The `nsim` argument says do it 100 times. (We would typically do something like a 1000, but in the interest of time we do 100.). The `.progress` argument says output a text-based progress bar so we can keep tabs on progress.
+Here's how we can get an estimate of the difference:
 
 ```{r}
 nd1 <- data.frame(treat="thiouracil", weeks=4)
 nd2 <- data.frame(treat="thyroxine", weeks=4)
+predict(lmm3, newdata = nd1, re.form=NA) -
+                     predict(lmm3, newdata = nd2, re.form=NA)
+```
+
+How can we get a confidence interval on that difference? Here's one way using `bootMer()`.
+
+First we tell the `bootMer()` function to use the `lmm3` model to simulate data and then refit the model. The `FUN` argument tells `bootMer()` what to do with the newly fit model. In this case, make a prediction using our two datasets and take the difference. The `nsim` argument says do it 100 times. (We would typically do something like a 1000, but in the interest of time we do 100.). The `.progress` argument says output a text-based progress bar so we can keep tabs on progress.
+
+```{r}
 b.out <- bootMer(x = lmm3, 
                  FUN = function(x){
                    predict(x, newdata = nd1, re.form=NA) -
@@ -645,24 +621,14 @@ diff(predict(lmm3, newdata = nd, re.form = NA))
 
 Now use `bootMer()` to perform this 100 times using newly fitted models from simulated responses. Save the result to `b.out2`. When done, use the quantile function to get an approximate confidence interval.
 
-```{r}
-b.out2 <- bootMer(lmm3, 
-                  FUN = function(x){
-                    diff(predict(x, newdata = nd, re.form = NA))
-                    },
-                  nsim = 100, .progress = "txt")
-```
 
-```{r}
-quantile(b.out2$t, probs = c(0.025, 0.975))
-```
 
 
 ## We're done!
 
 Thanks for coming.
 
-For help and advice with statistics, contact us to set up an appointment: statlab@virginia.edu
+For help and advice with statistics, contact us to set up an appointment: `statlab@virginia.edu`
 
 Sign up for more workshops or see past workshops:
 http://data.library.virginia.edu/training/
@@ -698,6 +664,7 @@ summary(lmm3a, corr = FALSE)
 
 
 ### AIC and BIC
+
 AIC and BIC are basically log-likelihood measures penalized for number of model parameters. The formula is `-2*log-likelihood + k*npar`, where `npar` represents the number of parameters in the fitted model and `k` is the penalty per parameter.
 
 The AIC penalty: k = 2

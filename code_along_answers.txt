@@ -1,0 +1,119 @@
+## CODE ALONG 1
+
+
+1. Visualize the data using ggplot2. Group by id.
+
+```{r}
+ggplot(d3) +
+  aes(x = x, y = y, color = id) +
+  geom_point() +
+  geom_line()
+```
+
+
+2. Model y as a function of x with a random intercept conditional on id. Call the model `me3`.
+
+```{r}
+me3 <- lmer(y ~ x + (1|id), data = d3)
+```
+
+
+3. Check the constant variance assumption for the observations. What do you think?
+
+```{r}
+plot(me3)
+```
+
+
+4. Now fit a model that assumes the subject exerts a random effect on both the intercept and slope, using the formula `y ~ x + (x|id)`. Call the model `me4`.
+
+```{r}
+me4 <- lmer(y ~ x + (x|id), data = d3)
+```
+
+
+5. Check the assumption of constant variance for the observation random effect for `me4`. What do you think?
+
+```{r}
+plot(me4)
+```
+
+6. View the coefficients of `me4`. Notice each subject has their own intercept and slope.
+
+```{r}
+coef(me4)
+```
+
+
+## CODE ALONG 2
+
+
+1. Let's fit a model with an interaction between treat and weeks, and let's leave the intercept conditional on subject. Call the model `lmm2`
+
+```{r}
+lmm2 <- lmer(wt ~ treat * weeks + (1 | subject), data=ratdrink)
+summary(lmm2, corr = FALSE)
+```
+
+2. Is this model "good"? Check the Residual plot.
+
+```{r}
+plot(lmm2)
+```
+
+3. Create an effect plot using ggeffects.
+
+```{r}
+ggpredict(lmm2, terms = c("weeks", "treat")) |>
+  plot(ci = FALSE, add.data = TRUE)
+```
+
+4. what's the expected mean weight of a rat at week 4 for each treatment?
+
+```{r}
+g <- unique(ratdrink$treat)
+predict(lmm2, newdata = data.frame(weeks = 4, treat = g),
+        re.form = NA)
+```
+
+## CODE ALONG 3
+
+1. Fit a model with the random effect on weeks but not on the intercept: `(0 + weeks | subject)`. Call the model `lmm5`.
+
+```{r}
+lmm5 <- lmer(wt ~ treat * weeks + (0 + weeks | subject), data = ratdrink)
+summary(lmm5)
+```
+
+2. How does this model compare to `lmm3`, which has a random effect on both intercept and weeks?
+
+```{r}
+AIC(lmm5, lmm3)
+```
+
+
+## CODE ALONG 4
+
+What's the difference in expected weight at week 4 versus week 3 for rats on thiouracil? Use `bootMer()` to calculate a confidence interval on the difference using the `lmm3` model.
+
+Here's how we get one estimate using `predict()`
+
+```{r}
+nd <- data.frame(treat = "thiouracil", weeks = 3:4)
+# diff(x1, x2) = x2 - x1
+diff(predict(lmm3, newdata = nd, re.form = NA))
+```
+
+Now use `bootMer()` to perform this 100 times using newly fitted models from simulated responses. Save the result to `b.out2`. When done, use the quantile function to get an approximate confidence interval.
+
+```{r}
+b.out2 <- bootMer(lmm3, 
+                  FUN = function(x){
+                    diff(predict(x, newdata = nd, re.form = NA))
+                    },
+                  nsim = 100, .progress = "txt")
+```
+
+```{r}
+quantile(b.out2$t, probs = c(0.025, 0.975))
+```
