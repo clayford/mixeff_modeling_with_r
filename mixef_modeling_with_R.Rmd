@@ -22,7 +22,7 @@ Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or b
 
 ## CODE ALONG 0
 
-Enter a new code chunk and run the code `rnorm(10)` (sample 10 randon values from a standard normal distribution.)
+Enter a new code chunk and run the code `rnorm(10)` (sample 10 random values from a standard normal distribution.)
 
 
 ## Load packages
@@ -89,9 +89,10 @@ Let's simulate data where we add noise to the intercept that's _specific to each
 
 ```{r}
 # generate 7 id numbers, 10 each (10 obs on each "subject")
+# gl() function "generates levels"
 id <- gl(n = 7, k = 10)
 
-# repeat x 7 times
+# repeat 1:10 7 times
 x <- rep(1:10, 7)
 
 # generate a random effect specific to each observation (n = 10 * 7)
@@ -177,7 +178,7 @@ This is one way to think of mixed-effect/multilevel modeling: trying to work bac
 
 Notice two assumptions that `lmer()` made:
 
-1. The variance (noise) is constant for both random effects.
+1. The variance (noise) is constant for both random effects
 2. The variance (noise) comes from a Normal distribution for both random effects
 
 We can assess those assumptions with _diagnostic plots_.
@@ -194,7 +195,7 @@ Check constant variance for Subjects (aka, between subjects). Boxplots should be
 plot(me1, id ~ resid(.))
 ```
 
-To assess that the variance (noise) comes from a Normal distribution, we need to use a function in the lattice package called `qqmath()`. (The lattice package comes with R.)
+To assess that the variance (noise) is approximately Normal, we need to use a function in the lattice package called `qqmath()`. (The lattice package comes with R.)
 
 Remember we have two sources of variation (or random effects): Residuals (within subjects) and id (between subjects). To check Residual normality, we use the `qqmath()` function in the lattice package. The points should lie close to the diagonal line. The syntax `lattice::` allows us to access the function from the package without loading the package.
 
@@ -238,14 +239,14 @@ _Predictions with mixed-effect/multilevel models require extra thought_. We need
 - for any subject, or 
 - for a particular subject, such as subject 1 (id = 1)?
 
-To make a prediction for any subject, perhaps a new subject who wasn't sampled, we specify `re.form=NA`. This says just use fixed effects to make a prediction. Predict expected y when x = 3 for any subject:
+To make a prediction for any subject, perhaps a new subject who wasn't sampled, we specify `re.form=NA`. This says just use fixed effects to make a prediction. Predict expected y when x = 3 for _any subject_:
 
 ```{r}
 predict(me1, newdata = data.frame(x = 3),
         re.form=NA)
 ```
 
-To make a prediction for each subject _using their random intercept_, we drop the `re.form=NA` argument and include `id = 1:7` in our new data frame. Predict expected y when x = 3 for each subject.
+To make a prediction for each subject _using their random intercept_, we drop the `re.form=NA` argument and include `id = 1:7` in our new data frame. Predict expected y when x = 3 for _each subject_.
 
 ```{r}
 predict(me1, newdata = data.frame(x = 3, id = 1:7))
@@ -296,15 +297,16 @@ Add new R code chunks by clicking the *Insert Chunk* button on the toolbar or by
 2. Model y as a function of x with a random intercept conditional on id. Call the model `me3`.
 
 
-
 3. Check the constant variance assumption for the observations. What do you think?
+
+
 
 
 4. Now fit a model that assumes the subject exerts a random effect on both the intercept and slope, using the formula `y ~ x + (x|id)`. Call the model `me4`.
 
 
-
 5. Check the assumption of constant variance for the observation random effect for `me4`. What do you think?
+
 
 
 
@@ -317,7 +319,7 @@ Add new R code chunks by clicking the *Insert Chunk* button on the toolbar or by
 
 Let's look at some realistic data.
 
-The following data consist of 5 weekly measurements of body weight for 27 rats. 10 rats were on a control treatment. 7 rats has thyroxine added to their drinking water. 10 rats had thiouracil added to their water. We're interested in how the treatments affected the weight of the rats. Source: faraway package (Faraway, 2006)
+The following data consist of 5 weekly measurements of body weight for 27 rats. 10 rats were on a control treatment. 7 rats had thyroxine added to their drinking water. 10 rats had thiouracil added to their water. We're interested in how the treatments affected the weight of the rats. Source: faraway package (Faraway, 2006)
 
 ```{r}
 URL2 <- "https://raw.githubusercontent.com/clayford/mixeff_modeling_with_r/main/data/ratdrink.csv"
@@ -382,10 +384,12 @@ It appears we may need to let the trajectory over weeks vary by treatment. We ca
 ## CODE ALONG 2
 
 
-1. Let's fit a model with an interaction between treat and weeks, and let's leave 
+1. Let's fit a model with an interaction between treat and weeks, and let's leave the intercept conditional on subject. Call the model `lmm2`
+
 
 
 2. Is this model "good"? Check the Residual plot.
+
 
 
 
@@ -393,7 +397,10 @@ It appears we may need to let the trajectory over weeks vary by treatment. We ca
 
 
 
+
+
 4. what's the expected mean weight of a rat at week 4 for each treatment?
+
 
 
 
@@ -409,9 +416,11 @@ summary(lmm2, corr = FALSE)
 Since we have interactions, it takes some work to interpret the coefficients.
 
 - The `Intercept` is the expected weight of a rat at week 0 in the control group: about 52.8 grams
+
 - The `weeks` coefficient is the expected amount of weight in grams a rat in the control group adds each week: about 26.5 grams.
 
 - The `treatthiouracil` coefficient is what we _add_ to the `Intercept` to get the expected weight of a rat at week 0 is the thiouracil group: about 52.8 + 4.8 = 57.6 grams
+
 - The `treatthiouracil:weeks` coefficient is what we _add_ to the `weeks` coefficient to the expected amount of weight in grams a rat in the thiouracil group adds each week: about 26.5 + -9.4 = 17.1 grams
 
 The same calculations can be done for the thyroxine coefficients.
@@ -466,9 +475,9 @@ In this updated model the intercept and weeks random effects are _assumed to be 
 VarCorr(lmm3)
 ```
 
-The correlation estimate is small, only -0.133. Correlated random effects in this case means that subjects' random effects on the intercept and weeks coefficients are associated. For example, if one subject has a large random effect on the intercept, they may have a large random effect on the weeks coefficient. 
+The correlation estimate is small, only -0.133. Correlated random effects in this case means that subjects' random effects on the intercept and weeks coefficients are associated. For example, if one subject has a large random effect on the intercept, they may have a small random effect on the weeks coefficient. That would be a negative correlation.
 
-If we like we can fit a model with no correlation between random effects. To do this we use two pipes in the random effects formula: `(weeks || subject)`. (This only works for numeric predictors.)
+If we like we can fit a model with _no correlation between random effects_. To do this we use two pipes in the random effects formula: `(weeks || subject)`. (This only works for numeric predictors.)
 
 ```{r}
 lmm4 <- lmer(wt ~ treat * weeks + (weeks || subject), data=ratdrink)
@@ -489,9 +498,8 @@ It seems slightly better, though that may be due to the sample. Probably doesn't
 
 
 
-
 2. How does this model compare to `lmm3`, which has a random effect on both intercept and weeks?
-
+lmm5, lmm3)
 
 
 ## Making comparisons
@@ -500,7 +508,7 @@ Let's say we're happy with model `lmm3`. It's good enough. How can we use that m
 
 A package that is useful for this is the **emmeans** package. That's short for Estimated Marginal Means. emmeans is a large and powerful package. We show two basic uses in this example.
 
-It appears at week 4, the end of the observation period, rats on thiouracil weigh less than rats on the other two treatments. How much less? We use the `emmeans()` function to analyze this. It takes a fitted model as the first argument. The second argument uses emmeans syntax to specify we want `pairwise` comparisons between all three treatments. The `at` argument allows us to specify at what time point we want to make the comparisons. Notice this needs to be a data frame. (The note about results being misleading can be ignored.)
+It appears at week 4, the end of the observation period, rats on thiouracil weigh less than rats on the other two treatments. How much less? We use the `emmeans()` function to analyze this. It takes a fitted model as the first argument. The second argument uses emmeans syntax to specify we want `pairwise` comparisons between all three treatments. The `at` argument allows us to specify at what time point we want to make the comparisons. Notice this needs to be a data frame. (The note about results being misleading can be ignored since we set the `at` argument.)
 
 ```{r}
 emmeans(lmm3, pairwise ~ treat, at = data.frame(weeks = 4))
@@ -511,7 +519,7 @@ The first section returns the estimated mean weight for each treatment at week 4
 Probably better to look at confidence intervals. Below we pipe the previous result into `confint()`.
 
 ```{r}
-emmeans(lmm3, pairwise ~ treat, at = (list(weeks = 4))) |>
+emmeans(lmm3, pairwise ~ treat, at = data.frame(weeks = 4)) |>
   confint()
 ```
 
@@ -559,6 +567,7 @@ Model comparison via AIC tells us `lmm3` is better.
 ```{r}
 AIC(lmm3, lmmX)
 ```
+
 But in what ways is `lmm3` better? Let's simulate wt using the `lmmX` model and overlay the model generated distributions on top of the observed distribution. 
 
 ```{r}
@@ -567,15 +576,15 @@ plot(density(ratdrink$wt))
 for(i in 1:50)lines(density(sim2[[i]]), col = "grey80")
 ```
 
-It doesn't look horrible, but in the 100 - 200 range the observed data does not seem consistent with the model generated data. The `lmm3` model with treat does a better job of capturing the variation in rats as they get heavier.
+It doesn't look horrible, but in the 100 - 200 range the observed data does not seem consistent with the model generated data. The `lmm3` model with treat does a better job of capturing the variation in rats _as they get heavier_.
 
 Another use for simulation is to approximate confidence intervals for predictions. Recall the usual `predict` method for `lmer()` models does not compute standard errors, and hence does not calculate confidence intervals.
 
-To do this we'll use the `bootMer()` function. This is like `simulate()` but goes a step further. After each simulation of new responses, a new model is refit. Once we fit a new model, we can make a prediction. We can then repeat this process many times to get many simulated predictions. We can then use all those predictions to make inference about the uncertainty of our predictions. This is referred to as a _model-based bootstrapping_. And it's probably easier to understand with a demonstration.
+To do this we'll use the `bootMer()` function that comes with lme4. This is like `simulate()` but goes a step further. After each simulation of new responses, _a new model is refit_. Once we fit a new model, we can make a prediction. We can then repeat this process many times to get many simulated predictions. We can then use all those predictions to make inference about the uncertainty of our predictions. This is referred to as a _model-based bootstrapping_. And it's probably easier to understand with a demonstration.
 
 Let's say we want to calculate a confidence interval on the difference in means between thiouracil and thyroxine at week 4 using our `lmm3` model.
 
-Here's how we can get an estimate of the difference:
+Here's how we can get an estimate of the difference by simply subtracting the result from one `predict()` from another.
 
 ```{r}
 nd1 <- data.frame(treat="thiouracil", weeks=4)

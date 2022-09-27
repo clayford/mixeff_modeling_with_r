@@ -1,7 +1,7 @@
 ---
 title: "Linear Mixed-Effect Modeling with R"
 author: "Clay Ford"
-date: "spring 2022"
+date: "fall 2022"
 output: beamer_presentation
 ---
 

@@ -1,3 +1,7 @@
+Mixed-Effect/Multilevel Modeling with R
+Code along answers
+
+
 ## CODE ALONG 1
 
 
@@ -82,7 +86,7 @@ predict(lmm2, newdata = data.frame(weeks = 4, treat = g),
 
 ```{r}
 lmm5 <- lmer(wt ~ treat * weeks + (0 + weeks | subject), data = ratdrink)
-summary(lmm5)
+summary(lmm5, corr = FALSE)
 ```
 
 2. How does this model compare to `lmm3`, which has a random effect on both intercept and weeks?
