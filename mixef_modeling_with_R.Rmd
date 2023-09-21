@@ -70,7 +70,7 @@ This is one way to think of linear modeling or regression: we try to recover the
 
 Assuming our data came from a function of the form _y = a + b*x_ with noise sampled from a Normal distribution, the model estimates a as 2.7468 and b as 2.0821. Those are fairly close to the true values of 3 and 2. The noise is estimated to be from a Normal distribution with mean 0 and standard deviation 1.214 (Residual standard error). Again close to the true value of 1.5.
 
-We might say the _fixed effects_ are about 2.75 and 2.08, and the _random effect_ is 1.24.
+We might say the estimated _fixed effects_ are about 2.75 and 2.08, and the estimated _random effect_ is 1.24.
 
 If we like we can fit this model to the data using the ggeffects package.
 
@@ -84,7 +84,7 @@ plot(ggpredict(m, terms = "x"), add.data = TRUE)
 
 Pretend the previous example data was for one subject. What if we had 7 subjects, each with 10 observations? 
 
-Let's simulate data where we add noise to the intercept that's _specific to each subject_. In other words each subject has a _random effect_. 
+Let's simulate data where we add noise to the intercept that's _specific to each subject_. In other words each subject has their own _random effect_. 
 
 
 ```{r}
@@ -92,10 +92,12 @@ Let's simulate data where we add noise to the intercept that's _specific to each
 # gl() function "generates levels"
 id <- gl(n = 7, k = 10)
 
+# generate an independent variable
 # repeat 1:10 7 times
 x <- rep(1:10, 7)
 
-# generate a random effect specific to each observation (n = 10 * 7)
+# generate a random effect specific to each observation 
+# 7 subjects, each with 10 observations (n = 10 * 7)
 set.seed(2)
 obs_noise <- rnorm(7 * 10, mean = 0, sd = 1.5)
 
@@ -134,7 +136,9 @@ How do we "work backwards" as we did with the simple linear model and recover th
 
 Because we are dealing with models with a mix of fixed and random effects, we sometimes call these **Mixed-Effect Models**. Another name is **Multilevel Models** because we're dealing with different levels of observations. (eg, we observe 7 subjects, but also observe 10 observations on each subject.)
 
-Below we model y as a function of x plus an intercept (1) that is conditional on id (the subject) using the `lmer()` function from the lme4 package. Notice this is the _correct model_! The y value really is a function of x plus an intercept that varies between subjects. The syntax `(1|id)` means "the intercept is conditional on the id." Each subject exerts a random effect on the intercept.
+Two popular packages used to fit mixed-effect models are {nlme} and {lme4}. The {nlme} package comes with base R. The {lme4} package needs to be installed. Both were developed by the same author, Doug Bates. The {lme4} package came later. It has an easier modeling syntax and works better for larger data sets. But {nlme} can fit certain models that {lme4} can't fit, and vice versa. We'll use {lme4} today but that doesn't mean {nlme} is obsolete. 
+
+Below we model y as a function of x plus an intercept (1) that is conditional on id (the subject) using the `lmer()` function from the {lme4} package. Notice this is the _correct model_! The y value really is a function of x plus an intercept that varies between subjects. The syntax `(1|id)` means "the intercept is conditional on the id." Each subject exerts a random effect on the intercept.
 
 ```{r}
 me1 <- lmer(y ~ x + (1|id), data = d2)
@@ -143,7 +147,9 @@ summary(me1)
 
 The _Fixed Effects_ section says that assuming this data came from a straight line model with an intercept and slope, the model estimates the intercept to be 2.65 and the slope to be 1.97. These are close to the true values of 3 and 2. 
 
-The _Random Effects_ section reports two standard deviations: one for id and and one called "Residual". The first is the estimate of the standard deviation of the normal distribution from which the subject-specific noise was drawn: 1.157. The second is the estimate of the standard deviation of the normal distribution from which the residual noise was drawn: 1.795. Recall the true values were 2 and 1.5, respectively. 
+The _Random Effects_ section reports two standard deviations: one for id and and one called "Residual". The first is the estimate of the standard deviation of the normal distribution from which the subject-specific noise was drawn: 1.157. The second is the estimate of the standard deviation of the normal distribution from which the observation-specific noise was drawn: 1.795. Recall the true values were 2 and 1.5, respectively. 
+
+The _Correlation of Fixed Effects_ section has nothing to do with collinearity. These are the covariances of the model coefficients converted to correlations. Going forward we will suppress this output by setting `corr = FALSE`. See the Appendix of this notebook for more information on the correlation of fixed effects.
 
 If we look at the coefficients of this model using the `coef()` function, notice everyone got their _own intercept_ but has the same slope. We have essentially fit a straight line model to each subject. This is sometimes called a _random intercept model_. Each subject has a random effect associated with the intercept.
 
@@ -178,8 +184,8 @@ This is one way to think of mixed-effect/multilevel modeling: trying to work bac
 
 Notice two assumptions that `lmer()` made:
 
-1. The variance (noise) is constant for both random effects
-2. The variance (noise) comes from a Normal distribution for both random effects
+1. The variance (noise) is constant for random effects
+2. The variance (noise) comes from a Normal distribution for random effects
 
 We can assess those assumptions with _diagnostic plots_.
 
@@ -197,33 +203,35 @@ plot(me1, id ~ resid(.))
 
 To assess that the variance (noise) is approximately Normal, we need to use a function in the lattice package called `qqmath()`. (The lattice package comes with R.)
 
-Remember we have two sources of variation (or random effects): Residuals (within subjects) and id (between subjects). To check Residual normality, we use the `qqmath()` function in the lattice package. The points should lie close to the diagonal line. The syntax `lattice::` allows us to access the function from the package without loading the package.
+Remember we have two sources of variation (or random effects): Residuals (within subjects) and id (between subjects). To check Residual normality, we use the `qqmath()` function in the {lattice} package. The points should lie close to the diagonal line. The syntax `lattice::` allows us to access the function from the package without loading the package.
 
 ```{r}
 lattice::qqmath(me1)
 ```
 
-To assess the normality assumption of the subjects' random effects we again use the `qqmath()` function, but first have to extract the estimated random effects from the model object using the `ranef()` function. 
+To assess the normality assumption of the subjects' random effects we can also use the {lattice} `qqmath()` function, but first we have to extract the estimated random effects from the model object using the `ranef()` function. 
 
-Remember the subject random effects we generated: `subj_noise`?
+Remember the subject random effects we sampled from a normal distribution: `subj_noise`?
 
 ```{r}
 subj_noise
 ```
 
-The model also tries to estimate those values as well. Again, we can see them using the `ranef()` function.
+The model also tries to estimate those values as well. Again, we can see the estimates using the `ranef()` function.
 
 ```{r}
 ranef(me1)
 ```
 
-Feed the output of that function to `qqmath`.
+We can feed the output of that function to `qqmath()` from the {lattice} package to assess the normality assumption.
 
 ```{r}
 lattice::qqmath(ranef(me1))
 ```
 
 This is similar to the previous plot but only has 7 points (one for each subject). It also has a +/- 1 standard deviation bar to give some sense of the uncertainty in the estimate of each subject's random effect. We'd like those points to roughly form a diagonal line.
+
+Violations of these assumptions usually mean we have a poor model. Sometimes we can try transforming the dependent variable, including an interaction, or allowing non-linear effects. But sometimes there's nothing we can do. The variation in the dependent variable may not be well explained by the candidate predictor variables. 
 
 ## Using our model for predictions
 
@@ -407,7 +415,7 @@ It appears we may need to let the trajectory over weeks vary by treatment. We ca
 
 ## Interpreting model coefficients
 
-Recall the model summary:
+Recall the model summary from CODE ALONG 2:
 
 ```{r}
 summary(lmm2, corr = FALSE)
@@ -427,9 +435,9 @@ The same calculations can be done for the thyroxine coefficients.
 
 The "Std. Error" column quantifies the uncertainty in the coefficient. The "t value" is the ratio Estimate/Std. Error. A t value greater than about 3 in absolute value provides evidence the estimated coefficient is different from 0. In other words, it's more than three standard errors away from 0.
 
-_Where are the p-values?_ In mixed-effect models the distribution of t values for the null hypothesis is not known, at least not for unbalanced data. P-values can be approximated, but not calculated precisely. The `lme4` authors elected to not output p-values. Probably better to look at confidence intervals anyway. (See _Appendix_ for a package that outputs p-values, **lmerTest**)
+_Where are the p-values?_ In mixed-effect models the distribution of t values for the null hypothesis is not known, at least not for unbalanced data. P-values can be approximated (sometimes), but not calculated precisely. The {lme4} authors elected to not output p-values. Probably better to look at confidence intervals anyway. (See _Appendix_ for a package that outputs approximate p-values, **lmerTest**)
 
-We can get confidence intervals for the coefficients by using the `confint` function. Notice we get confidence intervals for the random effect estimates as well. Setting `oldNames = FALSE` returns more informative names for the random effects.
+We can get confidence intervals for the coefficients by using the `confint()` function. Notice we get confidence intervals for the random effect estimates as well. Setting `oldNames = FALSE` returns more informative names for the random effects.
 
 ```{r}
 confint(lmm2, oldNames = FALSE)
@@ -437,9 +445,9 @@ confint(lmm2, oldNames = FALSE)
 
 ## Comparing models
 
-We have many options when building a mixed-effect model. In addition to what predictors to include and whether they should interact, we get to decide how many random effects to allow. The previous model allowed for one random effect on the intercept. 
+We have many options when building a mixed-effect model. In addition to what predictors to include and whether they should interact, we get to decide how many random effects to allow. This leads to multiple candidate models. How can we decide which model is "best"?
 
-Let's allow a random effect on weeks as well. This says the effect of weeks is conditional on each rat. (This may not be correct.)
+The previous model allowed for one random effect on the intercept. Let's allow a random effect on weeks as well. This says the effect of weeks is conditional on each rat. (This may not be correct.)
 
 ```{r}
 lmm3 <- lmer(wt ~ treat * weeks + (weeks | subject), data=ratdrink)
@@ -490,7 +498,7 @@ How does this model compare to the model with correlated random effects?
 AIC(lmm3, lmm4)
 ```
 
-It seems slightly better, though that may be due to the sample. Probably doesn't make a difference. 
+It seems slightly better, though that may be due to the sample. In the spirit of simplicity, we may prefer model `lmm4` because it estimates one fewer parameter. 
 
 ## CODE ALONG 3
 
@@ -630,12 +638,9 @@ diff(predict(lmm3, newdata = nd, re.form = NA))
 
 Now use `bootMer()` to perform this 100 times using newly fitted models from simulated responses. Save the result to `b.out2`. When done, use the quantile function to get an approximate confidence interval.
 
-
-
-
 ## We're done!
 
-Thanks for coming.
+Thanks for coming. See the Appendix below for more topics.
 
 For help and advice with statistics, contact us to set up an appointment: `statlab@virginia.edu`
 
@@ -662,7 +667,7 @@ http://bbolker.github.io/mixedmodels-misc/glmmFAQ.html
 
 ### Approximate p-values with lme4
 
-The **lmerTest** package provides approximate p-values in lme4 summary output. Simply load the package and fit your model as usual.
+The {lmerTest} package provides approximate p-values in {lme4} summary output. Simply load the package and fit your model as usual.
 
 ```{r}
 # install.packages("lmerTest)
@@ -671,6 +676,56 @@ lmm3a <- lmer(wt ~ treat * weeks + (weeks | subject), data=ratdrink)
 summary(lmm3a, corr = FALSE)
 ```
 
+
+### Correlation of Fixed Effects
+
+By default the `lmer()` summary output includes a section entitled "Correlation of Fixed Effects" at the bottom. 
+
+```{r}
+summary(lmm1)
+```
+
+These are the coefficient covariances rescaled to correlation. Below we extract the covariances using the `vcov()` function and then convert to correlation using the `cov2cor()` function to replicate the output.
+
+```{r}
+vcov(lmm1) |> cov2cor()
+```
+
+Imagine we fit our lmm1 model above many times, each time using a new random sample. We will get new estimates of fixed effects every time. The correlation of fixed effects gives us some sense of how those many fixed effect estimates might be associated. For example, it appears the coefficients for thyroxine and thiouracil are somewhat positively correlated (0.4537). If a new model fit based on another random sample produced a higher coefficients for thyroxine, we might expect the coefficient for thiouracil to be slightly higher as well.
+
+NOTE: Examining the correlation of fixed effects is NOT the same as examining your model for collinearity. That involves the correlation of the predictors, not the model’s fixed effects.
+
+For more information on the Correlation of Fixed Effects, see this article:
+https://library.virginia.edu/data/articles/correlation-of-fixed-effects-in-lme4
+
+### More diagnostics
+
+The {DHARMa} package uses a simulation-based approach to generating residuals for mixed-effect/multilevel models. This can come in handy when you're fitting generalized mixed-effect models with binary or count responses. It also works with linear mixed-effect models. The basic idea is to simulate new data from the fitted model, say 250 data sets, which means we have 250 simulated values for each observed value. Then for _each data point_, we find the quantile of the observed data point _among the simulated values_ for that data point. So a quantile of 0.50 means half of the simulated values are larger than the observed value. If we have fit a good model, the distribution of the quantiles should be uniformly distributed.
+
+Below is the basic use of the {DHARMa} package. First simulate the residuals using the `simulateResiduals()` function. The default is 250, which we make explicit below. We save the result as `simResids`.
+
+```{r}
+library(DHARMa)
+simResids <- simulateResiduals(lmm3, n = 250, plot = F)
+```
+
+Then plot the results.
+
+```{r}
+plot(simResids)
+```
+
+The _plot on the left_ is a uniform distribution QQ plot to assess the distribution of the quantile residuals. If they follow a uniform distribution they should lie on a diagonal line. Three hypothesis tests are printed on the plot:
+
+1. Kolmogorov-Smirnov (KS) Test: Null = residuals and theoretical uniform quantiles both drawn from same distribution. 
+2. Dispersion Test: Null = residuals are not over- or under-dispersed. 
+3. Outlier Test: Null = no outliers in residuals.
+
+We fail to reject all three tests above, which is a good thing.
+
+The _plot on the right_ shows the quantile residuals versus the model fitted values, which have been rank-ordered and divided by their maximum value to rescale to [0,1]. In addition, three quantile regressions are displayed for 0.25, 0.50, and 0.75. If the quantile residuals are uniformly distributed, these three fitted quantile regression lines should be approximately flat. Any outliers will be highlighted in red.
+
+From the {DHARMa} vignette: "DHARMa only flags a difference between the observed and expected data - the user has to decide whether this difference is actually a problem for the analysis!" The plots neither prove the model is correct nor prove the model is wrong. They are simply one more tool to assess goodness of fit.
 
 ### AIC and BIC
 
@@ -720,4 +775,22 @@ To get BIC by hand
 ```{r}
 c(-2*ll + log(n) * npar)
 ```
+
+### Reporting mixed-effect model output
+
+There is no universally agreed-upon method to report mixed-effect model results. Some journals prefer every last detail, while others want to see a few selected estimates.
+
+The {modelsummary} package provides a handy function called `modelsummary()` to report the results for several different models. Below we report the results for three of the models we fit earlier. Notice we need to wrap multiple models in a list. Notice it also includes approximate R-squared values. The marginal R2 considers only the variance of the fixed effects (without the random effects), while the conditional R2 takes both the fixed and random effects into account (ie, the total model).
+
+```{r}
+library(modelsummary)
+modelsummary(list("Model 1" = lmm1, 
+                  "Model 2" = lmm2, 
+                  "Model 3" = lmm3), 
+             output = "markdown")
+```
+
+The {modelsummary} package is very powerful and still evolving. See their web page for more information: https://modelsummary.com/index.html
+
+
 
