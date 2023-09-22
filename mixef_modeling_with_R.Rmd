@@ -510,11 +510,11 @@ It seems slightly better, though that may be due to the sample. In the spirit of
 lmm5, lmm3)
 
 
-## Making comparisons
+## Making effect comparisons
 
 Let's say we're happy with model `lmm3`. It's good enough. How can we use that model to make comparisons between treatments at certain times? How can we compare trends over time between treatments?  
 
-A package that is useful for this is the **emmeans** package. That's short for Estimated Marginal Means. emmeans is a large and powerful package. We show two basic uses in this example.
+A package that is useful for this is the {emmeans} package. That's short for Estimated Marginal Means. {emmeans} is a large and powerful package. We show two basic uses in this example.
 
 It appears at week 4, the end of the observation period, rats on thiouracil weigh less than rats on the other two treatments. How much less? We use the `emmeans()` function to analyze this. It takes a fitted model as the first argument. The second argument uses emmeans syntax to specify we want `pairwise` comparisons between all three treatments. The `at` argument allows us to specify at what time point we want to make the comparisons. Notice this needs to be a data frame. (The note about results being misleading can be ignored since we set the `at` argument.)
 
@@ -652,30 +652,80 @@ Register for the Research Data Services newsletter: http://data.library.virginia
 ##References
 
 - Faraway, J. (2006). *Extending the Linear Model with R*. Chapman and Hall/CRC.
-
 - Galecki, A. and Burzykowski T. (2013). *Linear Mixed-Effect Models Using R*. Springer.
-
 - Pinheiro, J. & Bates, D. (2000). *Mixed-Effects Models in S and S-PLUS*. Springer.
-
 - West, B., Welch, K., & Galecki, A. (2015) *Linear Mixed Models*. Chapman and Hall/CRC.
-
-GLMM FAQ:   
-http://bbolker.github.io/mixedmodels-misc/glmmFAQ.html
+- GLMM FAQ: http://bbolker.github.io/mixedmodels-misc/glmmFAQ.html
 
 
 ## Appendix
 
 ### Approximate p-values with lme4
 
-The {lmerTest} package provides approximate p-values in {lme4} summary output. Simply load the package and fit your model as usual.
+The {lmerTest} package provides approximate p-values in {lme4} summary output. Simply load the package and fit your model as usual. Remember, they're approximate and not necessarily a good approximation.
 
 ```{r}
-# install.packages("lmerTest)
+# install.packages("lmerTest")
 library(lmerTest)
 lmm3a <- lmer(wt ~ treat * weeks + (weeks | subject), data=ratdrink)
 summary(lmm3a, corr = FALSE)
 ```
 
+
+## Intraclass Correlation Coefficient (ICC)
+
+The ICC describes the similarity of the dependent variable within a cluster or unit of analysis. In our examples above, the unit of analysis was a rat since we had multiple observations per rat. Examples of clusters include schools, hospitals, cites, plots of land, etc., where we would have multiple observations within each cluster.
+
+The ICC is usually calculated as the ratio of random effect variance to total variance. Therefore an ICC close to 1 means much of the variability is due to differences between units/clusters, which implies a great deal of similarity within units/clusters. An ICC close to 0 means very little of the variability is due to differences between units/clusters and there is not much similarity within units/clusters.
+
+Recall model `lmm1`. Let's calculate the ICC.
+
+```{r}
+summary(lmm1, corr = FALSE)
+```
+
+Use the variances listed under "Random effects":
+
+```{r}
+#  subject/(subject + Residual)
+60.42/(60.42 + 105.15)
+```
+
+We can use the `icc()` function from the {performance} package to carry out this calculation. It is reported as "Adjusted ICC".
+
+```{r}
+# install.packages("performance")
+performance::icc(lmm1)
+```
+
+The "Unadjusted ICC" includes fixed effects variance in the denominator. In other words, the ICC is not adjusted for fixed effects. We can calculate this by taking the variance of the fitted values generated without random effects.
+
+```{r}
+# re.form = NA means do not use random effects when making predictions
+var(predict(lmm1, re.form = NA))
+```
+
+Add to denominator to calculate Unadjusted ICC:
+
+```{r}
+60.42/(60.42 + 105.15 + 1130.058)
+```
+
+Recall model `lmm3` which had two random effects and covariance between random effects. 
+
+```{r}
+summary(lmm3, corr = FALSE)
+```
+
+The ICC for this model is higher.
+
+```{r}
+performance::icc(lmm3)
+```
+
+The `lmm3` model allows for random effects on the intercept and the weeks coefficients. The variability of those random effects represent about 85% of the total variation in weight. This says there's a lot of similarity within the measurements of each rat, which makes sense.
+
+For mixed-effect models with more than one random effect, ICC calculations are more complex and not as easy to replicate "by hand".
 
 ### Correlation of Fixed Effects
 
