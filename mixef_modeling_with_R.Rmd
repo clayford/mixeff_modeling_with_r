@@ -305,12 +305,14 @@ Add new R code chunks by clicking the *Insert Chunk* button on the toolbar or by
 2. Model y as a function of x with a random intercept conditional on id. Call the model `me3`.
 
 
+
 3. Check the constant variance assumption for the observations. What do you think?
 
 
 
 
 4. Now fit a model that assumes the subject exerts a random effect on both the intercept and slope, using the formula `y ~ x + (x|id)`. Call the model `me4`.
+
 
 
 5. Check the assumption of constant variance for the observation random effect for `me4`. What do you think?
@@ -672,11 +674,13 @@ summary(lmm3a, corr = FALSE)
 ```
 
 
-## Intraclass Correlation Coefficient (ICC)
+### Intraclass Correlation Coefficient (ICC)
 
-The ICC describes the similarity of the dependent variable within a cluster or unit of analysis. In our examples above, the unit of analysis was a rat since we had multiple observations per rat. Examples of clusters include schools, hospitals, cites, plots of land, etc., where we would have multiple observations within each cluster.
+The ICC describes the similarity of the dependent variable within a cluster or unit of analysis. In our examples above, the unit of analysis was a rat since we had multiple observations per rat. Examples of clusters include schools, hospitals, cites, plots of land, etc., where we would have multiple observations within each cluster. We might think of the ICC as the correlation among observations on the same unit or within the same cluster.
 
-The ICC is usually calculated as the ratio of random effect variance to total variance. Therefore an ICC close to 1 means much of the variability is due to differences between units/clusters, which implies a great deal of similarity within units/clusters. An ICC close to 0 means very little of the variability is due to differences between units/clusters and there is not much similarity within units/clusters.
+The ICC is usually calculated as the ratio of random effect variance to total variance. Therefore an ICC close to 1 means much of the variability is due to differences between units/clusters, which implies a great deal of similarity within units/clusters. An ICC close to 0 means very little of the variability is due to differences between units/clusters, which implies there is not much similarity within units/clusters.
+
+Whether you report ICC depends on your field of study. Some fields give it a lot of emphasis, others not so much. 
 
 Recall model `lmm1`. Let's calculate the ICC.
 
