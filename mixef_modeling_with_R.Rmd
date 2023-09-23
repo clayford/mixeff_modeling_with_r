@@ -34,8 +34,8 @@ library(lme4)
 library(ggplot2)
 library(ggeffects)
 library(emmeans)
+library(RLRsim)
 ```
-
 
 
 ## Simple linear regression review
@@ -121,7 +121,7 @@ And two random effects:
 
 Let's visualize the data. We have lines with _different intercepts_ but similar slopes. That's because _we added each subject's random effect to the fixed intercept_. Any differences in slopes are due to random effects associated with each observation.
 
-The argument `method = "lm"` below adds a regression line to each subject's values.
+The argument `method = "lm"` below adds a regression line to each subject's values. The argument `se = FALSE` suppresses confidence bands.
 
 ```{r}
 ggplot(d2) +
@@ -177,7 +177,46 @@ Add the random effects to the intercept to get each subject's intercept. This ma
 fixef(me1)[1] + ranef(me1)$id
 ```
 
-This is one way to think of mixed-effect/multilevel modeling: trying to work backward to determine the data generation process. Our example was simple and we knew the data generating process because we simulated the data. In real life we never know if our model is correct (spoiler: it never is) and the data generating process is complicated.
+This is one way to think of mixed-effect/multilevel modeling: trying to work backward to determine the data generation process. Our example was simple and we knew the data generating process because we simulated the data.  In real life we never know if our model is correct (spoiler: it never is). At best we hope build a model that approximates the data generation process.
+
+
+## REML vs ML
+
+In the model output above it says "Linear mixed model fit by REML". REML is an acronym for _Restricted Maximum Likelihood_. This is a type of estimation procedure. An alternative estimation procedure is ML, or _Maximum Likelihood_. The ML procedure returns biased estimates of the random effects. They're estimated to be _smaller_ than they really are. REML generally returns less biased estimates. If data is _balanced_, that is we have equal number of observations on subjects/clusters, the REML and ML estimates are about the same. We can fit a model using ML by setting `REML = FALSE`
+
+```{r}
+me2 <- lmer(y ~ x + (1|id), data = d2, REML = FALSE)
+```
+
+Recall we simulated our data using random effects of 1.5 and 2.
+
+The ML estimates are lower than the REML estimates. We can view the model random effects estimates using the `VarCorr()` function.
+
+```{r}
+# ML
+VarCorr(me2)
+```
+
+Notice the REML estimates are slightly higher and closer to the true values.
+
+```{r}
+# REML
+VarCorr(me1)
+```
+
+The fixed effect estimates are the same.
+
+```{r}
+cbind("me1" = fixef(me1), "me2" = fixef(me2))
+```
+
+So why is ML even available to use as an estimator if it returns biased estimators? It turns out that REML is not a suitable estimator when comparing models that differ _only in their fixed effects_. We will see this in action later in the workshop.
+
+If you have a good amount of data and propose a reasonable model, the difference in ML and REML estimation will likely be slight. Doug Bates, the author of the lme4 package, had this to say about REML on the R mixed models mailing list back in 2015:
+
+"I will admit that the original sin, the REML criterion, was committed by statisticians. In retrospect I wish that we had not incorporated that criterion into the nlme and lme4 packages but, at the time we wrote them, our work would have been dismissed as wrong if our answers did not agree with SAS PROC MIXED, etc. So we opted for bug-for-bug compatibility with existing software."
+
+https://stat.ethz.ch/pipermail/r-sig-mixed-models/2015q3/023743.html
 
 
 ## Checking assumptions
@@ -329,7 +368,7 @@ Add new R code chunks by clicking the *Insert Chunk* button on the toolbar or by
 
 Let's look at some realistic data.
 
-The following data consist of 5 weekly measurements of body weight for 27 rats. 10 rats were on a control treatment. 7 rats had thyroxine added to their drinking water. 10 rats had thiouracil added to their water. We're interested in how the treatments affected the weight of the rats. Source: faraway package (Faraway, 2006)
+The following data consist of 5 weekly measurements of body weight for 27 rats. 10 rats were on a control treatment. 7 rats had thyroxine added to their drinking water. 10 rats had thiouracil added to their water. We're interested in how the treatments affected the weight of the rats. Source: faraway package (Faraway, 2006) Notice this data is _unbalanced_.
 
 ```{r}
 URL2 <- "https://raw.githubusercontent.com/clayford/mixeff_modeling_with_r/main/data/ratdrink.csv"
@@ -420,6 +459,7 @@ It appears we may need to let the trajectory over weeks vary by treatment. We ca
 Recall the model summary from CODE ALONG 2:
 
 ```{r}
+lmm2 <- lmer(wt ~ treat * weeks + (1 | subject), data=ratdrink)
 summary(lmm2, corr = FALSE)
 ```
 
@@ -437,7 +477,7 @@ The same calculations can be done for the thyroxine coefficients.
 
 The "Std. Error" column quantifies the uncertainty in the coefficient. The "t value" is the ratio Estimate/Std. Error. A t value greater than about 3 in absolute value provides evidence the estimated coefficient is different from 0. In other words, it's more than three standard errors away from 0.
 
-_Where are the p-values?_ In mixed-effect models the distribution of t values for the null hypothesis is not known, at least not for unbalanced data. P-values can be approximated (sometimes), but not calculated precisely. The {lme4} authors elected to not output p-values. Probably better to look at confidence intervals anyway. (See _Appendix_ for a package that outputs approximate p-values, **lmerTest**)
+_Where are the p-values?_ In mixed-effect models the distribution of t values for the null hypothesis is not known, at least not for unbalanced data. P-values can be approximated (sometimes), but not calculated precisely. The {lme4} authors elected to not output p-values. Probably better to look at confidence intervals anyway. (See _Appendix_ for a package that outputs approximate/questionable p-values, {lmerTest})
 
 We can get confidence intervals for the coefficients by using the `confint()` function. Notice we get confidence intervals for the random effect estimates as well. Setting `oldNames = FALSE` returns more informative names for the random effects.
 
@@ -445,111 +485,185 @@ We can get confidence intervals for the coefficients by using the `confint()` fu
 confint(lmm2, oldNames = FALSE)
 ```
 
+We can also request bootstrap confidence intervals.
+
+```{r}
+confint(lmm2, oldNames = FALSE, method = "boot")
+```
+
+
 ## Comparing models
 
 We have many options when building a mixed-effect model. In addition to what predictors to include and whether they should interact, we get to decide how many random effects to allow. This leads to multiple candidate models. How can we decide which model is "best"?
 
-The previous model allowed for one random effect on the intercept. Let's allow a random effect on weeks as well. This says the effect of weeks is conditional on each rat. (This may not be correct.)
+When comparing mixed-effect models it's probably best to either...
+
+- compare models that differ _only in fixed effects_
+- compare models that differ _only in random effects_
+
+For example, lmm1 and lmm2 differ only in their fixed effects. The lmm2 model includes an interaction. The effect of treat depends on weeks, and vice versa. But both have the same random effect.
+
+```{r}
+formula(lmm1)
+formula(lmm2)
+```
+
+Technically model lmm1 is _nested_ within lmm2. It's a version of lmm2 where the interaction is 0. We can use the `anova()` function to compare the models using a hypothesis test. 
+
+```{r}
+anova(lmm1, lmm2)
+```
+
+Notice both models are refit using ML. However the test statistic and p-value may be questionable. The Chisq test statistic is merely an approximation. In this case we would probably prefer to compare AIC/BIC values. 
+
+AIC stands for Akaike Information Criterion. BIC stands for Bayesian Information Criterion. (See Appendix of this document for more information.) These are basically measures of how well the model would fit new data. Lower values mean a better "fit". An AIC/BIC value by itself doesn't mean much. But if we have multiple AIC/BIC values from different models fit to the same data with the same response, we can use them to help us select a "preferred" model. According to AIC/BIC, the model with the interaction appears to be decisively better.
+
+Now let's compare models that differ only in their random effects.
+
+The lmm2 model allowed for one random effect on the intercept. Let's fit a new model that allows a random effect on weeks as well. This says the effect of weeks is conditional on each rat. (This may not be correct.) By default this will also estimate subject random effect on the intercept.
 
 ```{r}
 lmm3 <- lmer(wt ~ treat * weeks + (weeks | subject), data=ratdrink)
 summary(lmm3, corr = FALSE)
 ```
 
-Under Random Effects we have three estimates of "noise" or variance. We can think of those values as the standard deviations of Normal distributions (with mean 0) from which random values were drawn. Notice also the random effects for the intercept and weeks are assumed to be correlated. 
+Under Random Effects we have _three estimates_ of "noise" or variance: 
+
+1. subject random effect on the intercept
+2. subject random effect on the weeks coefficient
+3. correlation between the two subject random effects.
+
+The correlation estimate is small, only -0.133. Correlated random effects in this case means that subjects' random effects on the intercept and weeks coefficients are associated. For example, if one subject has a large random effect on the intercept, they may have a small random effect on the weeks coefficient. That would be a negative correlation.
+
+Let's fit a model with _no correlation between random effects_. To do this we can use two pipes in the random effects formula: `(weeks || subject)`. (This only works for numeric predictors.)
+
+```{r}
+lmm4 <- lmer(wt ~ treat * weeks + (weeks || subject), data=ratdrink)
+```
+
+An alternative way to specify the model is to explicitly state two random effects: one for the intercept and one for weeks. Because the intercept random effect is fit by default, we can use `0 + weeks` to suppress it.
+
+```{r}
+lmm4 <- lmer(wt ~ treat * weeks + (1 | subject) + (0 + weeks | subject),
+             data=ratdrink)
+summary(lmm4)
+```
 
 If we look at the coefficients, each rat now has their own intercept and weeks coefficients. 
 
 ```{r}
-coef_out <- coef(lmm3)
+coef_out <- coef(lmm4)
 coef_out$subject
 ```
 
-Is this model better than the model with just a random intercept? One way to assess this is with selection criteria such as AIC or BIC. These are basically measures of how well the model would fit new data. Lower values mean a better "fit". An AIC/BIC value by itself doesn't mean much. But if we have multiple AIC/BIC values from different models fit to the same data with the same response, we can use them to help us select a "preferred" model.
-
-AIC stands for Akaike Information Criterion. BIC stands for Bayesian Information Criterion. (See Appendix of this document for more information.) Each can be obtained using `AIC()` or `BIC()`, respectively. The df column in the output refers to degrees of freedom. That's the number of parameters our model estimated. More parameters means a more complicated model. 
+Is model lmm4 better than model lmm2 that just has a random intercept? In other words, do we need the random effect for weeks?
 
 ```{r}
-AIC(lmm2, lmm3)
+formula(lmm2)
+formula(lmm4)
 ```
 
+Since we're comparing models that differ only in random effects, it's not appropriate to use the hypothesis test implemented in the `anova()` function (though it will still run and provide results.)
+
+Instead we turn to the {RLRsim} package, which provides simulation-based exact likelihood ratio tests for testing random effects. The function we want to use is `exactRLRT()`. 
+
+The `exactRLRT()` function takes three arguments:
+
+1. m: the model with just the random effect were testing (weeks)
+2. mA: the full model with both random effects (intercept and weeks)
+3. m0: the model with just the random effect that remains (intercept)
+
+All models should have the same fixed effects.
+
+The null of this test is that the weeks random effect is 0 and unnecessary. A small p-value provides evidence against this hypothesis.
+
+We need to fit a model with just the weeks random effect. We'll call it "lmm_red". 
+
 ```{r}
-BIC(lmm2, lmm3)
+lmm4_red <- lmer(wt ~ treat * weeks + (0 + weeks | subject), data=ratdrink)
 ```
 
-In both cases it looks like `lmm3` is the better model. It seems the random effect for weeks is justified. 
-
-In this updated model the intercept and weeks random effects are _assumed to be correlated_. We can extract just the random effect variance estimates with the `VarCorr()` function. This is the portion presented in the Random Effects section of the summary output. 
+Now we're ready to test whether or not we need the random effect on weeks.
 
 ```{r}
-VarCorr(lmm3)
+exactRLRT(m = lmm4_red, mA = lmm4, m0 = lmm2)
 ```
 
-The correlation estimate is small, only -0.133. Correlated random effects in this case means that subjects' random effects on the intercept and weeks coefficients are associated. For example, if one subject has a large random effect on the intercept, they may have a small random effect on the weeks coefficient. That would be a negative correlation.
+We have very strong evidence that the subject random effect on weeks is good to have in our model.
 
-If we like we can fit a model with _no correlation between random effects_. To do this we use two pipes in the random effects formula: `(weeks || subject)`. (This only works for numeric predictors.)
+Did we really need this test? Again look at the model random effects for lmm4.
 
 ```{r}
-lmm4 <- lmer(wt ~ treat * weeks + (weeks || subject), data=ratdrink)
 VarCorr(lmm4)
 ```
 
-How does this model compare to the model with correlated random effects?
-
-```{r}
-AIC(lmm3, lmm4)
-```
-
-It seems slightly better, though that may be due to the sample. In the spirit of simplicity, we may prefer model `lmm4` because it estimates one fewer parameter. 
+The standard deviation is estimated to be about 3.7. This is in units of grams. That seems pretty big. Common sense would dictate that this random effect is adding value to the model. Clearly the effect of time is a little different for each rat. Nevertheless, the above procedure is appropriate in the event you really need to use formal statistical inference for deciding whether or not to include a random effect.
 
 ## CODE ALONG 3
 
-1. Fit a model with the random effect on weeks but not on the intercept: `(0 + weeks | subject)`. Call the model `lmm5`.
+1. Update model lmm4 with a non-linear effect on weeks using `poly(weeks, 2)`. This is a second degree polynomial. Call the model `lmm5`.
 
 
 
-2. How does this model compare to `lmm3`, which has a random effect on both intercept and weeks?
-lmm5, lmm3)
+2. How does this model compare to `lmm4`, which has a simpl linear effect on weeks?
+
 
 
 ## Making effect comparisons
 
-Let's say we're happy with model `lmm3`. It's good enough. How can we use that model to make comparisons between treatments at certain times? How can we compare trends over time between treatments?  
+Let's say we're happy with model `lmm4`. It's good enough. How can we use that model to make comparisons between treatments at certain times? How can we compare trends over time between treatments?  
 
 A package that is useful for this is the {emmeans} package. That's short for Estimated Marginal Means. {emmeans} is a large and powerful package. We show two basic uses in this example.
 
-It appears at week 4, the end of the observation period, rats on thiouracil weigh less than rats on the other two treatments. How much less? We use the `emmeans()` function to analyze this. It takes a fitted model as the first argument. The second argument uses emmeans syntax to specify we want `pairwise` comparisons between all three treatments. The `at` argument allows us to specify at what time point we want to make the comparisons. Notice this needs to be a data frame. (The note about results being misleading can be ignored since we set the `at` argument.)
+It appears at week 4, the end of the observation period, rats on thiouracil weigh less than rats on the other two treatments. How much less? We use the `emmeans()` function to analyze this. It takes a fitted model as the first argument. The second argument uses {emmeans} syntax to specify we want `pairwise` comparisons between all three treatments. The `at` argument allows us to specify at what time point we want to make the comparisons. Notice this needs to be a data frame. (The note about results being misleading can be ignored since we set the `at` argument.)
 
 ```{r}
-emmeans(lmm3, pairwise ~ treat, at = data.frame(weeks = 4))
+emmeans(lmm4, pairwise ~ treat, at = data.frame(weeks = 4))
 ```
 
-The first section returns the estimated mean weight for each treatment at week 4. The second section compares those weights. The mean weight for rats on thiouracil is 126. That's about 32 grams less than the control and thyroxine groups. Those differences appear to be significant judging by p-values. NOTE: The p-values are approximate. Recall we can't precisely calculate p-values for mixed-effect models with unbalanced groups. The Kenward-Roger method is one approach for obtaining approximate p-values.
+The first section returns the estimated mean weight for each treatment at week 4. The second section compares those weights. The mean weight for rats on thiouracil is 126. That's about 32-34 grams less than the control and thyroxine groups. Those differences appear to be significant judging by p-values. NOTE: The p-values are approximate. Recall we can't precisely calculate p-values for mixed-effect models with unbalanced groups. The Kenward-Roger method is one approach for obtaining approximate p-values.
 
 Probably better to look at confidence intervals. Below we pipe the previous result into `confint()`.
 
 ```{r}
-emmeans(lmm3, pairwise ~ treat, at = data.frame(weeks = 4)) |>
+emmeans(lmm4, pairwise ~ treat, at = data.frame(weeks = 4)) |>
   confint()
 ```
 
-It appears that rats on thiouracil can be expected to weigh at least 15 grams less than the other two groups at 4 weeks.
+It appears that rats on thiouracil can be expected to weigh at least 14 grams less than the other two groups at 4 weeks.
 
 To compare the trends (or slopes) over time, we use the `emtrends()` function. The syntax is almost the same as before, except this time we use the `var` argument to specify the x-axis of the trend line. In this case it's weeks.
 
 ```{r}
-emtrends(lmm3, pairwise ~ treat, var = "weeks")
+emtrends(lmm4, pairwise ~ treat, var = "weeks")
 ```
 
 The trend or slope of thiouracil appears to be about 10 units less than the other two groups: 17 versus 27. That difference appears to be significant according to p-values. Again we can pipe the result into `confint()` to get confidence intervals.
 
 ```{r}
-emtrends(lmm3, pairwise ~ treat, var = "weeks") |>
+emtrends(lmm4, pairwise ~ treat, var = "weeks") |>
   confint()
 ```
 
 The difference in trend looks to be at least 5 between thioruacil and the other two groups.
 
+Effect plots are useful for visualizing mixed-effect models. They are indispensable for understanding interactions and non-linear effects. The {ggeffects} package makes this super easy to create some basic plots. The most simple usage is to call the `ggpredict()` function on your model and specify which terms to visualize in a vector. The first term will form the x-axis, the second will form the groups. Then pipe the result into the {ggeffects} `plot()` method.
+
+```{r}
+ggpredict(lmm4, terms = c("weeks", "treat")) |>
+  plot()
+```
+
+Notice the trend over time for the thiouracil group is less pronounced. That's the interaction at work. 
+
+Recall model lmm5 that had a non-linear effect on weeks. Let's visualize that model. We specify `weeks[all]` to get a smooth plot.
+
+```{r}
+ggpredict(lmm5, terms = c("weeks[all]", "treat")) |>
+  plot()
+```
+
+Notice the slight bend in the thiouracil fitted line. That's both the interaction and non-linear effect at work.
 
 
 ## Using Simulation with Mixed-Effect Models

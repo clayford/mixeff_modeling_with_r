@@ -82,17 +82,19 @@ predict(lmm2, newdata = data.frame(weeks = 4, treat = g),
 
 ## CODE ALONG 3
 
-1. Fit a model with the random effect on weeks but not on the intercept: `(0 + weeks | subject)`. Call the model `lmm5`.
+
+1. Update model lmm4 with a non-linear effect on weeks using `poly(weeks, 2)`. This is a second degree polynomial. Call the model `lmm5`.
 
 ```{r}
-lmm5 <- lmer(wt ~ treat * weeks + (0 + weeks | subject), data = ratdrink)
-summary(lmm5, corr = FALSE)
+lmm5 <- lmer(wt ~ poly(weeks, 2) * treat + (1 | subject) + 
+               (0 + weeks | subject), data = ratdrink)
 ```
 
-2. How does this model compare to `lmm3`, which has a random effect on both intercept and weeks?
+2. How does this model compare to `lmm4`, which has a simpl linear effect on weeks?
+
 
 ```{r}
-AIC(lmm5, lmm3)
+anova(lmm5, lmm4)
 ```
 
 
