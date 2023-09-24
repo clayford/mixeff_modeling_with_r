@@ -116,8 +116,8 @@ Now we have two fixed effects:
 - Slope = 2
 
 And two random effects:
-- Observation: N(0, 1.5)
-- Subject: N(0, 2)
+- Subject: N(0, 2), variation between subjects
+- Observation: N(0, 1.5), measurement error or unrecorded variables
 
 Let's visualize the data. We have lines with _different intercepts_ but similar slopes. That's because _we added each subject's random effect to the fixed intercept_. Any differences in slopes are due to random effects associated with each observation.
 
@@ -578,35 +578,10 @@ confint(lmm4, parm = "theta_", oldNames = FALSE)
 
 The 95% confidence interval on the weeks random effect is about [2.6, 4.8]. I think we can safely conclude the random effect is not 0.
 
-Answering this question with a hypothesis test is tricky, because it means testing if _variance equals 0_. This is a weird test since variance cannot be less than 0. We're at the boundary of possible values. This means it's not appropriate to use the hypothesis test implemented in the `anova()` function (though it will still run and provide results.)
+Comparing models that differ only in their random effects using a hypothesis test is tricky because it means testing if _variance equals 0_. This is a weird test since variance cannot be less than 0. We're at the boundary of possible values. This means it's not appropriate to use the hypothesis test implemented in the `anova()` function (though it will still run and provide results.)
 
-Instead we turn to the {RLRsim} package, which provides simulation-based exact likelihood ratio tests for testing random effects. The function we want to use is `exactRLRT()`. 
+One option is to use the {RLRsim} package, which provides simulation-based exact likelihood ratio tests for testing random effects. A demonstration is included in the Appendix of this document.
 
-The `exactRLRT()` function takes three arguments:
-
-1. m: the model with just the random effect were testing (weeks)
-2. mA: the full model with both random effects (intercept and weeks)
-3. m0: the model with just the random effect that remains (intercept)
-
-All models should have the same fixed effects.
-
-The null of this test is that the weeks random effect is 0 and unnecessary. A small p-value provides evidence against this hypothesis.
-
-We need to fit a model with just the weeks random effect. We'll call it "lmm_red". 
-
-```{r}
-lmm4_red <- lmer(wt ~ treat * weeks + (0 + weeks | subject), data=ratdrink)
-```
-
-Now we're ready to test whether or not we need the random effect on weeks.
-
-```{r}
-exactRLRT(m = lmm4_red, mA = lmm4, m0 = lmm2)
-```
-
-We have very strong evidence that the subject random effect on weeks is good to have in our model. We can reject the null that the random effect variance for weeks is 0. 
-
-We didn't need to go to all this trouble. The confidence interval quickly answered this question and gave us additional information on the uncertainty and magnitude of the weeks random effect. Nevertheless, the above procedure is appropriate in the event you really need to use a formal hypothesis test to decide whether or not a random effect is significantly different from 0.
 
 ## CODE ALONG 3
 
@@ -903,6 +878,38 @@ We fail to reject all three tests above, which is a good thing.
 The _plot on the right_ shows the quantile residuals versus the model fitted values, which have been rank-ordered and divided by their maximum value to rescale to [0,1]. In addition, three quantile regressions are displayed for 0.25, 0.50, and 0.75. If the quantile residuals are uniformly distributed, these three fitted quantile regression lines should be approximately flat. Any outliers will be highlighted in red.
 
 From the {DHARMa} vignette: "DHARMa only flags a difference between the observed and expected data - the user has to decide whether this difference is actually a problem for the analysis!" The plots neither prove the model is correct nor prove the model is wrong. They are simply one more tool to assess goodness of fit.
+
+### Hypothesis tests for random effects
+
+Comparing models that differ only in their random effects using a hypothesis test is tricky because it means testing if _variance equals 0_. This is a weird test since variance cannot be less than 0. We're at the boundary of possible values. This means it's not appropriate to use the hypothesis test implemented in the `anova()` function (though it will still run and provide results.)
+
+Instead we turn to the {RLRsim} package, which provides simulation-based exact likelihood ratio tests for testing random effects. The function we want to use is `exactRLRT()`. 
+
+The `exactRLRT()` function takes three arguments:
+
+1. m: the model with just the random effect were testing (weeks)
+2. mA: the full model with both random effects (intercept and weeks)
+3. m0: the model with just the random effect that remains (intercept)
+
+All models should have the same fixed effects.
+
+The null of this test is that the weeks random effect is 0 and unnecessary. A small p-value provides evidence against this hypothesis.
+
+We need to fit a model with just the weeks random effect. We'll call it "lmm_red". 
+
+```{r}
+lmm4_red <- lmer(wt ~ treat * weeks + (0 + weeks | subject), data=ratdrink)
+```
+
+Now we're ready to test whether or not we need the random effect on weeks.
+
+```{r}
+exactRLRT(m = lmm4_red, mA = lmm4, m0 = lmm2)
+```
+
+We have very strong evidence that the subject random effect on weeks is good to have in our model. We can reject the null that the random effect variance for weeks is 0. 
+
+We didn't need to go to all this trouble. The confidence interval quickly answered this question and gave us additional information on the uncertainty and magnitude of the weeks random effect. Nevertheless, the above procedure is appropriate in the event you really need to use a formal hypothesis test to decide whether or not a random effect is significantly different from 0.
 
 ### AIC and BIC
 
