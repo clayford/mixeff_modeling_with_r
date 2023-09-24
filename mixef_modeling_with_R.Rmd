@@ -508,7 +508,7 @@ formula(lmm1)
 formula(lmm2)
 ```
 
-Technically model lmm1 is _nested_ within lmm2. It's a version of lmm2 where the interaction is 0. We can use the `anova()` function to compare the models using a hypothesis test. 
+Technically model lmm1 is _nested_ within lmm2. It's a version of lmm2 where the interaction is 0. We can use the base R `anova()` function to compare the models using a hypothesis test. 
 
 ```{r}
 anova(lmm1, lmm2)
@@ -520,7 +520,7 @@ AIC stands for Akaike Information Criterion. BIC stands for Bayesian Information
 
 Now let's compare models that differ only in their random effects.
 
-The lmm2 model allowed for one random effect on the intercept. Let's fit a new model that allows a random effect on weeks as well. This says the effect of weeks is conditional on each rat. (This may not be correct.) By default this will also estimate subject random effect on the intercept.
+The lmm2 model allowed for one random effect on the intercept. Let's fit a new model that allows a random effect on weeks as well. We can do that by specifying `(weeks | subject)`. This says the effect of weeks is conditional on each rat. (This may not be correct.) By default this will also estimate subject random effect on the intercept!
 
 ```{r}
 lmm3 <- lmer(wt ~ treat * weeks + (weeks | subject), data=ratdrink)
@@ -534,6 +534,14 @@ Under Random Effects we have _three estimates_ of "noise" or variance:
 3. correlation between the two subject random effects.
 
 The correlation estimate is small, only -0.133. Correlated random effects in this case means that subjects' random effects on the intercept and weeks coefficients are associated. For example, if one subject has a large random effect on the intercept, they may have a small random effect on the weeks coefficient. That would be a negative correlation.
+
+Let's look at the confidence intervals on the three random effects. We can specify we just want random effects by specifying `parm = "theta_"`.
+
+```{r}
+confint(lmm3, parm = "theta_", oldNames = FALSE)
+```
+
+The confidence interval on the correlation is wide and uncertain. I don't think we need to estimate that parameter. 
 
 Let's fit a model with _no correlation between random effects_. To do this we can use two pipes in the random effects formula: `(weeks || subject)`. (This only works for numeric predictors.)
 
@@ -552,18 +560,25 @@ summary(lmm4)
 If we look at the coefficients, each rat now has their own intercept and weeks coefficients. 
 
 ```{r}
-coef_out <- coef(lmm4)
-coef_out$subject
+coef(lmm4)$subject
 ```
 
-Is model lmm4 better than model lmm2 that just has a random intercept? In other words, do we need the random effect for weeks?
+Is model lmm4 better than model lmm2 that just has a random intercept? In other words, do we need the random effect for weeks? 
 
 ```{r}
 formula(lmm2)
 formula(lmm4)
 ```
 
-Since we're comparing models that differ only in random effects, it's not appropriate to use the hypothesis test implemented in the `anova()` function (though it will still run and provide results.)
+The easiest thing to do is again look at the confidence intervals on the random effects.
+
+```{r}
+confint(lmm4, parm = "theta_", oldNames = FALSE)
+```
+
+The 95% confidence interval on the weeks random effect is about [2.6, 4.8]. I think we can safely conclude the random effect is not 0.
+
+Answering this question with a hypothesis test is tricky, because it means testing if _variance equals 0_. This is a weird test since variance cannot be less than 0. We're at the boundary of possible values. This means it's not appropriate to use the hypothesis test implemented in the `anova()` function (though it will still run and provide results.)
 
 Instead we turn to the {RLRsim} package, which provides simulation-based exact likelihood ratio tests for testing random effects. The function we want to use is `exactRLRT()`. 
 
@@ -589,15 +604,9 @@ Now we're ready to test whether or not we need the random effect on weeks.
 exactRLRT(m = lmm4_red, mA = lmm4, m0 = lmm2)
 ```
 
-We have very strong evidence that the subject random effect on weeks is good to have in our model.
+We have very strong evidence that the subject random effect on weeks is good to have in our model. We can reject the null that the random effect variance for weeks is 0. 
 
-Did we really need this test? Again look at the model random effects for lmm4.
-
-```{r}
-VarCorr(lmm4)
-```
-
-The standard deviation is estimated to be about 3.7. This is in units of grams. That seems pretty big. Common sense would dictate that this random effect is adding value to the model. Clearly the effect of time is a little different for each rat. Nevertheless, the above procedure is appropriate in the event you really need to use formal statistical inference for deciding whether or not to include a random effect.
+We didn't need to go to all this trouble. The confidence interval quickly answered this question and gave us additional information on the uncertainty and magnitude of the weeks random effect. Nevertheless, the above procedure is appropriate in the event you really need to use a formal hypothesis test to decide whether or not a random effect is significantly different from 0.
 
 ## CODE ALONG 3
 
@@ -605,7 +614,7 @@ The standard deviation is estimated to be about 3.7. This is in units of grams. 
 
 
 
-2. How does this model compare to `lmm4`, which has a simpl linear effect on weeks?
+2. How does this model compare to `lmm4`, which has a simple linear effect on weeks?
 
 
 
@@ -765,12 +774,12 @@ http://data.library.virginia.edu/training/
 
 Register for the Research Data Services newsletter: http://data.library.virginia.edu/newsletters/
 
-##References
+## References
 
-- Faraway, J. (2006). *Extending the Linear Model with R*. Chapman and Hall/CRC.
-- Galecki, A. and Burzykowski T. (2013). *Linear Mixed-Effect Models Using R*. Springer.
-- Pinheiro, J. & Bates, D. (2000). *Mixed-Effects Models in S and S-PLUS*. Springer.
-- West, B., Welch, K., & Galecki, A. (2015) *Linear Mixed Models*. Chapman and Hall/CRC.
+- Faraway, J. (2016). _Extending the Linear Model with R, 2nd ed_. Chapman and Hall/CRC.
+- Galecki, A. and Burzykowski T. (2013). _Linear Mixed-Effect Models Using R_. Springer.
+- Pinheiro, J. & Bates, D. (2000). _Mixed-Effects Models in S and S-PLUS_. Springer.
+- West, B., Welch, K., & Galecki, A. (2015) _Linear Mixed Models_. Chapman and Hall/CRC.
 - GLMM FAQ: http://bbolker.github.io/mixedmodels-misc/glmmFAQ.html
 
 
