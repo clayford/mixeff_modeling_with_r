@@ -1,5 +1,5 @@
 ---
-title: "Mixed-Effect/Multilevel Modeling with R"
+title: "Mixed-Effect/Multilevel Modeling in R"
 author: "Clay Ford, UVA Library"
 output: html_notebook
 editor_options: 
@@ -34,7 +34,6 @@ library(lme4)
 library(ggplot2)
 library(ggeffects)
 library(emmeans)
-library(RLRsim)
 ```
 
 
@@ -48,7 +47,6 @@ y <- 3 + 2*x
 d <- data.frame(x, y)
 plot(y ~ x, data = d)
 ```
-
 
 Now let's add some noise to each observation. We'll use 10 random draws from a Normal distribution with mean 0 and standard deviation of 1.5. The `set.seed(1)` function ensures we all draw the same values. Now y looks associated with x, but not completely determined by x. We might say there is a _random effect_ associated with each observation.
 
@@ -75,8 +73,8 @@ We might say the estimated _fixed effects_ are about 2.75 and 2.08, and the esti
 If we like we can fit this model to the data using the ggeffects package.
 
 ```{r}
-plot(ggpredict(m, terms = "x"), add.data = TRUE)
-
+ggpredict(m, terms = "x") |>
+  plot(add.data = TRUE)
 ```
 
 
@@ -182,7 +180,7 @@ This is one way to think of mixed-effect/multilevel modeling: trying to work bac
 
 ## REML vs ML
 
-In the model output above it says "Linear mixed model fit by REML". REML is an acronym for _Restricted Maximum Likelihood_. This is a type of estimation procedure. An alternative estimation procedure is ML, or _Maximum Likelihood_. The ML procedure returns biased estimates of the random effects. They're estimated to be _smaller_ than they really are. REML generally returns less biased estimates. If data is _balanced_, that is we have equal number of observations on subjects/clusters, the REML and ML estimates are about the same. We can fit a model using ML by setting `REML = FALSE`
+In the model output above it says "Linear mixed model fit by REML". REML is an acronym for _Restricted Maximum Likelihood_. This is a type of estimation procedure. An alternative estimation procedure is ML, or _Maximum Likelihood_. The ML procedure returns biased estimates of the random effects. They're estimated to be _smaller_ than they really are. REML generally returns less biased estimates. If data are _balanced_, that is we have equal number of observations on subjects/clusters, the REML and ML estimates are about the same. We can fit a model using ML by setting `REML = FALSE`
 
 ```{r}
 me2 <- lmer(y ~ x + (1|id), data = d2, REML = FALSE)
@@ -212,7 +210,7 @@ cbind("me1" = fixef(me1), "me2" = fixef(me2))
 
 So why is ML even available to use as an estimator if it returns biased estimators? It turns out that REML is not a suitable estimator when comparing models that differ _only in their fixed effects_. We will see this in action later in the workshop.
 
-If you have a good amount of data and propose a reasonable model, the difference in ML and REML estimation will likely be slight. Doug Bates, the author of the lme4 package, had this to say about REML on the R mixed models mailing list back in 2015:
+If you have a good amount of data and propose a reasonable model, the difference in ML and REML estimation will likely be slight. Doug Bates, the author of the {lme4} package, had this to say about REML on the R mixed models mailing list back in 2015:
 
 "I will admit that the original sin, the REML criterion, was committed by statisticians. In retrospect I wish that we had not incorporated that criterion into the nlme and lme4 packages but, at the time we wrote them, our work would have been dismissed as wrong if our answers did not agree with SAS PROC MIXED, etc. So we opted for bug-for-bug compatibility with existing software."
 
@@ -228,41 +226,25 @@ Notice two assumptions that `lmer()` made:
 
 We can assess those assumptions with _diagnostic plots_.
 
-Check constant variance for Residuals (aka, within subjects). Points should be evenly scattered around 0.
+Check constant variance for Residuals (aka, observation-specific noise). Points should be evenly scattered around 0. This plot looks great because we generated the data using constant variance to generate observation-specific noise.  
 
 ```{r}
 plot(me1)
 ```
 
-Check constant variance for Subjects (aka, between subjects). Boxplots should be evenly scattered around 0 for each subject. The syntax `id ~ resid(.)` means plot residuals by subject id. 
+Check constant variance for Subjects (aka, subject-specific noise). Boxplots should be evenly scattered around 0 for each subject. The syntax `id ~ resid(.)` means plot residuals by subject id. This plot also looks great because we generated the data using constant variance to generate subject-specific noise.
 
 ```{r}
 plot(me1, id ~ resid(.))
 ```
 
-To assess that the variance (noise) is approximately Normal, we need to use a function in the lattice package called `qqmath()`. (The lattice package comes with R.)
-
-Remember we have two sources of variation (or random effects): Residuals (within subjects) and id (between subjects). To check Residual normality, we use the `qqmath()` function in the {lattice} package. The points should lie close to the diagonal line. The syntax `lattice::` allows us to access the function from the package without loading the package.
+To assess that the Residuals (aka, observation-specific noise) are approximately Normal, we need to use a function in the lattice package called `qqmath()`. (The {lattice} package comes with R.) The points should lie close to the diagonal line. The syntax `lattice::` allows us to access the function from the package without loading the package. This plot looks great because we generated the Residual noise from a Normal distribution.  
 
 ```{r}
 lattice::qqmath(me1)
 ```
 
-To assess the normality assumption of the subjects' random effects we can also use the {lattice} `qqmath()` function, but first we have to extract the estimated random effects from the model object using the `ranef()` function. 
-
-Remember the subject random effects we sampled from a normal distribution: `subj_noise`?
-
-```{r}
-subj_noise
-```
-
-The model also tries to estimate those values as well. Again, we can see the estimates using the `ranef()` function.
-
-```{r}
-ranef(me1)
-```
-
-We can feed the output of that function to `qqmath()` from the {lattice} package to assess the normality assumption.
+To assess that the subject-specific random effects are approximately Normal we can also use the {lattice} `qqmath()` function, but first we have to extract the estimated random effects from the model object using the `ranef()` function. 
 
 ```{r}
 lattice::qqmath(ranef(me1))
@@ -284,7 +266,7 @@ predict(m, newdata = data.frame(x = 3),
 _Predictions with mixed-effect/multilevel models require extra thought_. We need to decide whether or not we want to condition on random effects. In other words, are we making a prediction....
 
 - for any subject, or 
-- for a particular subject, such as subject 1 (id = 1)?
+- for a particular subject, such as subject 3 (id = 3)?
 
 To make a prediction for any subject, perhaps a new subject who wasn't sampled, we specify `re.form=NA`. This says just use fixed effects to make a prediction. Predict expected y when x = 3 for _any subject_:
 
@@ -293,10 +275,10 @@ predict(me1, newdata = data.frame(x = 3),
         re.form=NA)
 ```
 
-To make a prediction for each subject _using their random intercept_, we drop the `re.form=NA` argument and include `id = 1:7` in our new data frame. Predict expected y when x = 3 for _each subject_.
+To make a prediction for a specific subject _using their random intercept_, we drop the `re.form=NA` argument and include `id` in our new data frame. Predict expected y when x = 3 for _for subject 3 (id = 3)_.
 
 ```{r}
-predict(me1, newdata = data.frame(x = 3, id = 1:7))
+predict(me1, newdata = data.frame(x = 3, id = 3))
 ```
 
 From the lme4 documentation for predict: "There is no option for computing standard errors of predictions because it is difficult to define an efficient method that incorporates uncertainty in the variance parameters." That means we cannot simply ask for confidence intervals for our predictions. We can however use the bootstrap. (see _Using Simulation with Mixed-Effect Models section_ below)
@@ -508,7 +490,7 @@ formula(lmm1)
 formula(lmm2)
 ```
 
-Technically model lmm1 is _nested_ within lmm2. It's a version of lmm2 where the interaction is 0. We can use the base R `anova()` function to compare the models using a hypothesis test. 
+Technically model lmm1 is _nested_ within lmm2. It's a version of lmm2 where the interaction coefficients are 0. We can use the base R `anova()` function to compare the models using a hypothesis test. The null hypothesis is no difference in the models. This implies testing that the coefficients on the interaction are jointly 0.
 
 ```{r}
 anova(lmm1, lmm2)
@@ -520,7 +502,7 @@ AIC stands for Akaike Information Criterion. BIC stands for Bayesian Information
 
 Now let's compare models that differ only in their random effects.
 
-The lmm2 model allowed for one random effect on the intercept. Let's fit a new model that allows a random effect on weeks as well. We can do that by specifying `(weeks | subject)`. This says the effect of weeks is conditional on each rat. (This may not be correct.) By default this will also estimate subject random effect on the intercept!
+The lmm2 model allowed for one random effect on the intercept. Let's fit a new model that allows a random effect on weeks as well. We can do that by specifying `(weeks | subject)`. This says the effect of weeks is conditional on each rat. By default this will also estimate subject random effect on the intercept!
 
 ```{r}
 lmm3 <- lmer(wt ~ treat * weeks + (weeks | subject), data=ratdrink)
@@ -576,7 +558,7 @@ The easiest thing to do is again look at the confidence intervals on the random 
 confint(lmm4, parm = "theta_", oldNames = FALSE)
 ```
 
-The 95% confidence interval on the weeks random effect is about [2.6, 4.8]. I think we can safely conclude the random effect is not 0.
+The 95% confidence interval on the weeks random effect is about [2.6, 4.8]. I think we can safely conclude the random effect is not 0. "Not 0" does not always mean relevant or important. In this case the subject-specific effect on weeks is about 2 - 5 grams. That seems somewhat important given the range of the weight values (about 45 - 190 grams).
 
 Comparing models that differ only in their random effects using a hypothesis test is tricky because it means testing if _variance equals 0_. This is a weird test since variance cannot be less than 0. We're at the boundary of possible values. This means it's not appropriate to use the hypothesis test implemented in the `anova()` function (though it will still run and provide results.)
 
@@ -605,7 +587,7 @@ It appears at week 4, the end of the observation period, rats on thiouracil weig
 emmeans(lmm4, pairwise ~ treat, at = data.frame(weeks = 4))
 ```
 
-The first section returns the estimated mean weight for each treatment at week 4. The second section compares those weights. The mean weight for rats on thiouracil is 126. That's about 32-34 grams less than the control and thyroxine groups. Those differences appear to be significant judging by p-values. NOTE: The p-values are approximate. Recall we can't precisely calculate p-values for mixed-effect models with unbalanced groups. The Kenward-Roger method is one approach for obtaining approximate p-values.
+The first section, "emmeans", returns the model-estimated mean weight for each treatment at week 4. The second section, "contrasts", compares those weights. The mean weight for rats on thiouracil is about 126. That's about 32-34 grams less than the control and thyroxine groups. Those differences appear to be significant judging by p-values. NOTE: The p-values are approximate. Recall we can't precisely calculate p-values for mixed-effect models with unbalanced groups. The Kenward-Roger method is one approach for obtaining approximate p-values.
 
 Probably better to look at confidence intervals. Below we pipe the previous result into `confint()`.
 
@@ -614,7 +596,7 @@ emmeans(lmm4, pairwise ~ treat, at = data.frame(weeks = 4)) |>
   confint()
 ```
 
-It appears that rats on thiouracil can be expected to weigh at least 14 grams less than the other two groups at 4 weeks.
+It appears that rats on thiouracil can be expected to weigh at least 14-15 grams less than the other two groups at 4 weeks.
 
 To compare the trends (or slopes) over time, we use the `emtrends()` function. The syntax is almost the same as before, except this time we use the `var` argument to specify the x-axis of the trend line. In this case it's weeks.
 
@@ -629,7 +611,7 @@ emtrends(lmm4, pairwise ~ treat, var = "weeks") |>
   confint()
 ```
 
-The difference in trend looks to be at least 5 between thioruacil and the other two groups.
+The difference in trend looks to be at least 5 between thioruacil and the other two groups. We might say expected weight gain for rats on thiouracil is about 5 - 15 grams less than thyroxine and the control groups.
 
 Effect plots are useful for visualizing mixed-effect models. They are indispensable for understanding interactions and non-linear effects. The {ggeffects} package makes this super easy to create some basic plots. The most simple usage is to call the `ggpredict()` function on your model and specify which terms to visualize in a vector. The first term will form the x-axis, the second will form the groups. Then pipe the result into the {ggeffects} `plot()` method.
 
@@ -652,67 +634,72 @@ Notice the slight bend in the thiouracil fitted line. That's both the interactio
 
 ## Using Simulation with Mixed-Effect Models
 
-If our mixed-effect model is good, it should generate data similar to our observed data. The `simulate()` function allows us to use our model to rapidly generate new responses using our model. We can then compare the distribution of the model generated responses to the distribution of our observed response data.
+### Posterior predictive checks
 
-Let's try `lmm3`. Below we specify 50 simulations and then use a `for` loop to plot a density curve for each simulation over the density curve of our observed data. 
+If our mixed-effect model is good, it should generate data similar to our observed data. This is sometimes called a "posterior predictive check". The `simulate()` function allows us to use our model to rapidly generate new responses using our model. We can then compare the distribution of the model generated responses to the distribution of our observed response data.
+
+Let's try `lmm5`. Recall the `lmm5` model formula:
 
 ```{r}
-sim1 <- simulate(lmm3, nsim = 50)
-plot(density(ratdrink$wt))
-for(i in 1:50)lines(density(sim1[[i]]), col = "grey80")
+formula(lmm5)
+```
+
+Below we specify 100 simulations and then use a `for` loop to plot a density curve for each simulation over the density curve of our observed data. The `ylim = c(0, 0.011)` argument was determined via trial and error.
+
+```{r}
+sim1 <- simulate(lmm5, nsim = 100)
+plot(density(ratdrink$wt), ylim = c(0, 0.011))
+for(i in 1:100)lines(density(sim1[[i]]), col = "grey80", lty = 2)
 ```
 
 That looks pretty good!
 
-Let's try a different model. Below we fit a model that doesn't take treat into account.
+Let's try a different model. Below we fit a model that doesn't take treat into account and only has a random effect on the intercept.
 
 ```{r}
-lmmX <- lmer(wt ~ weeks + (1|subject), data = ratdrink)
+lmmX <- lmer(wt ~ weeks + (1 | subject), 
+             data = ratdrink)
 ```
 
-Model comparison via AIC tells us `lmm3` is better. 
+
+Let's simulate wt using the `lmmX` model and overlay the model generated distributions on top of the observed distribution. 
 
 ```{r}
-AIC(lmm3, lmmX)
+sim2 <- simulate(lmmX, nsim = 100)
+plot(density(ratdrink$wt), ylim = c(0, 0.011))
+for(i in 1:100)lines(density(sim2[[i]]), col = "grey80", lty = 2)
 ```
 
-But in what ways is `lmm3` better? Let's simulate wt using the `lmmX` model and overlay the model generated distributions on top of the observed distribution. 
+It doesn't look horrible, but in the 100 - 200 range the observed data does not seem consistent with the model generated data. The `lmm5` model with treat does a better job of capturing the variation in rats _as they get heavier_.
 
-```{r}
-sim2 <- simulate(lmmX, nsim = 50)
-plot(density(ratdrink$wt))
-for(i in 1:50)lines(density(sim2[[i]]), col = "grey80")
-```
-
-It doesn't look horrible, but in the 100 - 200 range the observed data does not seem consistent with the model generated data. The `lmm3` model with treat does a better job of capturing the variation in rats _as they get heavier_.
+### Confidence intervals on predictions
 
 Another use for simulation is to approximate confidence intervals for predictions. Recall the usual `predict` method for `lmer()` models does not compute standard errors, and hence does not calculate confidence intervals.
 
 To do this we'll use the `bootMer()` function that comes with lme4. This is like `simulate()` but goes a step further. After each simulation of new responses, _a new model is refit_. Once we fit a new model, we can make a prediction. We can then repeat this process many times to get many simulated predictions. We can then use all those predictions to make inference about the uncertainty of our predictions. This is referred to as a _model-based bootstrapping_. And it's probably easier to understand with a demonstration.
 
-Let's say we want to calculate a confidence interval on the difference in means between thiouracil and thyroxine at week 4 using our `lmm3` model.
+Let's say we want to calculate a confidence interval on the difference in means between thiouracil and thyroxine at week 4 using our `lmm5` model.
 
 Here's how we can get an estimate of the difference by simply subtracting the result from one `predict()` from another.
 
 ```{r}
 nd1 <- data.frame(treat="thiouracil", weeks=4)
 nd2 <- data.frame(treat="thyroxine", weeks=4)
-predict(lmm3, newdata = nd1, re.form=NA) -
-                     predict(lmm3, newdata = nd2, re.form=NA)
+predict(lmm5, newdata = nd1, re.form=NA) -
+                     predict(lmm5, newdata = nd2, re.form=NA)
 ```
 
 How can we get a confidence interval on that difference? Here's one way using `bootMer()`.
 
-First we tell the `bootMer()` function to use the `lmm3` model to simulate data and then refit the model. The `FUN` argument tells `bootMer()` what to do with the newly fit model. In this case, make a prediction using our two datasets and take the difference. The `nsim` argument says do it 100 times. (We would typically do something like a 1000, but in the interest of time we do 100.). The `.progress` argument says output a text-based progress bar so we can keep tabs on progress.
+First we tell the `bootMer()` function to use the `lmm5` model to simulate data and then refit the model. The `FUN` argument tells `bootMer()` what to do with the newly fit model. In this case, make a prediction using our two datasets and take the difference. The `nsim` argument says do it 100 times. (We would typically do something like a 1000, but in the interest of time we do 100.). The `.progress` argument says output a text-based progress bar so we can keep tabs on progress.
 
 ```{r}
-b.out <- bootMer(x = lmm3, 
+b.out <- bootMer(x = lmm5, 
                  FUN = function(x){
                    predict(x, newdata = nd1, re.form=NA) -
                      predict(x, newdata = nd2, re.form=NA)}, 
                  nsim = 100, 
                  .progress = "txt")
-
 ```
 
 When this finishes running the `b.out` object is a list with several objects. The `t` object is the vector of differences. Using the quantile function we can extract the 2.5% and 97.5% percentiles to construct a confidence interval.
@@ -722,21 +709,30 @@ head(b.out$t)
 quantile(b.out$t, probs = c(0.025, 0.975))
 ```
 
-The confidence interval returned by emmeans was [-53.9, -15.2]. Recall the emmeans method used the Kenward-Roger approximation. The `bootMer()` confidence interval is a good deal smaller. 
+We estimate an expected mean difference of [-51.9, -29.5]. Compare this to the 95% confidence interval returned by {emmeans} which uses the Kenward-Roger approximation. That CI is [-60.0, -19.7], which is much wider.
+
+```{r}
+emm_out <- emmeans(lmm5, pairwise ~ treat, at = data.frame(weeks = 4)) |>
+  confint()
+emm_out$contrasts
+```
+
 
 ## CODE ALONG 4
 
-What's the difference in expected weight at week 4 versus week 3 for rats on thiouracil? Use `bootMer()` to calculate a confidence interval on the difference using the `lmm3` model.
+What's the difference in expected weight at week 4 versus week 3 for rats on thiouracil? Use `bootMer()` to calculate a confidence interval on the difference using the `lmm5` model.
 
 Here's how we get one estimate using `predict()`
 
 ```{r}
 nd <- data.frame(treat = "thiouracil", weeks = 3:4)
 # diff(x1, x2) = x2 - x1
-diff(predict(lmm3, newdata = nd, re.form = NA))
+diff(predict(lmm5, newdata = nd, re.form = NA))
 ```
 
 Now use `bootMer()` to perform this 100 times using newly fitted models from simulated responses. Save the result to `b.out2`. When done, use the quantile function to get an approximate confidence interval.
+
+
 
 ## We're done!
 
@@ -904,6 +900,8 @@ lmm4_red <- lmer(wt ~ treat * weeks + (0 + weeks | subject), data=ratdrink)
 Now we're ready to test whether or not we need the random effect on weeks.
 
 ```{r}
+# install.packages("RLRsim")
+library(RLRsim)
 exactRLRT(m = lmm4_red, mA = lmm4, m0 = lmm2)
 ```
 

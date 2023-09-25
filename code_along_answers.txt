@@ -113,7 +113,7 @@ diff(predict(lmm3, newdata = nd, re.form = NA))
 Now use `bootMer()` to perform this 100 times using newly fitted models from simulated responses. Save the result to `b.out2`. When done, use the quantile function to get an approximate confidence interval.
 
 ```{r}
-b.out2 <- bootMer(lmm3, 
+b.out2 <- bootMer(lmm5, 
                   FUN = function(x){
                     diff(predict(x, newdata = nd, re.form = NA))
                     },
