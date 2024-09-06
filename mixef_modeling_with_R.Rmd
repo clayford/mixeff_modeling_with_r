@@ -25,6 +25,28 @@ Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or b
 Enter a new code chunk and run the code `rnorm(10)` (sample 10 random values from a standard normal distribution.)
 
 
+## Agenda
+
+- Simple linear regression review
+- Motivation for mixed-effect/multilevel models
+- Checking assumptions of mixed-effect/multilevel models
+- Using our model for predictions
+- Interpreting coefficients
+- Comparing models
+- Comparing effects
+- Using simulation with mixed-effect/multilevel models
+
+Appendix Topics (topics cut for time)
+- ML vs REML
+- Approximate p-values
+- Intraclass Correlation Coefficient (ICC)
+- Correlation of Fixed Effects
+- Simulation-based diagnostics
+- Hypothesis tests for random effects
+- AIC and BIC review
+- Reporting mixed-effect/multilevel model output
+
+
 ## Load packages
 
 We're going to use the following packages in this workshop. Let's load them.
@@ -64,25 +86,28 @@ m <- lm(y ~ x, data = d)
 summary(m)
 ```
 
-This is one way to think of linear modeling or regression: we try to recover the process that generated the data.
-
-Assuming our data came from a function of the form _y = a + b*x_ with noise sampled from a Normal distribution, the model estimates a as 2.7468 and b as 2.0821. Those are fairly close to the true values of 3 and 2. The noise is estimated to be from a Normal distribution with mean 0 and standard deviation 1.214 (Residual standard error). Again close to the true value of 1.5.
+Assuming our data came from a function of the form _y = a + b*x_ with noise sampled from a Normal distribution, the model estimates _a_ as 2.7468 and _b_ as 2.0821. Those are fairly close to the true values of 3 and 2. The noise is estimated to be from a Normal distribution with mean 0 and standard deviation 1.214 (Residual standard error). Again close to the true value of 1.5.
 
 We might say the estimated _fixed effects_ are about 2.75 and 2.08, and the estimated _random effect_ is 1.24.
+
+This is one way to think of linear modeling or regression: we try to recover or approximate the process that generated the data. 
 
 If we like we can fit this model to the data using the ggeffects package.
 
 ```{r}
 ggpredict(m, terms = "x") |>
-  plot(add.data = TRUE)
+  plot(show_data = TRUE)
 ```
+
+This is one way to think of linear modeling or regression: we try to recover the process that generated the data. We try to work backwards to determine the true values of the fixed and random effects.
+
 
 
 ## Motivation for mixed-effect/multilevel models
 
 Pretend the previous example data was for one subject. What if we had 7 subjects, each with 10 observations? 
 
-Let's simulate data where we add noise to the intercept that's _specific to each subject_. In other words each subject has their own _random effect_. 
+Let's simulate data where we add noise to the intercept that's _specific to each subject_. In other words each subject has their own _random effect_ on the intercept. 
 
 
 ```{r}
@@ -114,8 +139,15 @@ Now we have two fixed effects:
 - Slope = 2
 
 And two random effects:
-- Subject: N(0, 2), variation between subjects
+- Subject: N(0, 2), subject-specific variation
 - Observation: N(0, 1.5), measurement error or unrecorded variables
+
+Our data is _not independent_. The first six rows are for subject 1.
+
+```{r}
+head(d2)
+```
+
 
 Let's visualize the data. We have lines with _different intercepts_ but similar slopes. That's because _we added each subject's random effect to the fixed intercept_. Any differences in slopes are due to random effects associated with each observation.
 
@@ -143,7 +175,13 @@ me1 <- lmer(y ~ x + (1|id), data = d2)
 summary(me1)
 ```
 
-The _Fixed Effects_ section says that assuming this data came from a straight line model with an intercept and slope, the model estimates the intercept to be 2.65 and the slope to be 1.97. These are close to the true values of 3 and 2. 
+The _Fixed Effects_ section says that assuming this data came from a straight line model with an intercept and slope, the model estimates the intercept to be 2.65 and the slope to be 1.97. These are close to the true values of 3 and 2.
+
+The Standard Error column estimates the uncertainty in the coefficients. For example, the x coefficient is estimated to be 1.97 with a SE of 0.07. In other words, we estimate the coefficient to be 1.97 give or take 0.07.
+
+The "t value" column is the ratio Estimate/Std. Error. A t value greater than about 3 in absolute value provides evidence the estimated coefficient is different from 0. In other words, it's more than three standard errors away from 0.
+
+_Where are the p-values?_ In mixed-effect models the distribution of t values for the null hypothesis is not known, at least not for unbalanced data. P-values can be approximated (sometimes), but not calculated precisely. The {lme4} authors elected to not output p-values. Probably better to look at confidence intervals anyway. See _Appendix_ for a package that outputs approximate/questionable p-values, {lmerTest}.
 
 The _Random Effects_ section reports two standard deviations: one for id and and one called "Residual". The first is the estimate of the standard deviation of the normal distribution from which the subject-specific noise was drawn: 1.157. The second is the estimate of the standard deviation of the normal distribution from which the observation-specific noise was drawn: 1.795. Recall the true values were 2 and 1.5, respectively. 
 
@@ -155,66 +193,7 @@ If we look at the coefficients of this model using the `coef()` function, notice
 coef(me1)
 ```
 
-We can extract each subject's estimated random effect with the `ranef()` function.
-
-```{r}
-ranef(me1)
-```
-
-This is the model's effort to estimate the subject-specific noise we generated, `subj_noise`.
-
-We add these random effects to the intercept fixed effect to get each subject's random intercept. See the fixed effects with the `fixef()` function.
-
-```{r}
-fixef(me1)
-```
-
-Add the random effects to the intercept to get each subject's intercept. This matches the `coef()` output above.
-
-```{r}
-fixef(me1)[1] + ranef(me1)$id
-```
-
-This is one way to think of mixed-effect/multilevel modeling: trying to work backward to determine the data generation process. Our example was simple and we knew the data generating process because we simulated the data.  In real life we never know if our model is correct (spoiler: it never is). At best we hope build a model that approximates the data generation process.
-
-
-## REML vs ML
-
-In the model output above it says "Linear mixed model fit by REML". REML is an acronym for _Restricted Maximum Likelihood_. This is a type of estimation procedure. An alternative estimation procedure is ML, or _Maximum Likelihood_. The ML procedure returns biased estimates of the random effects. They're estimated to be _smaller_ than they really are. REML generally returns less biased estimates. If data are _balanced_, that is we have equal number of observations on subjects/clusters, the REML and ML estimates are about the same. We can fit a model using ML by setting `REML = FALSE`
-
-```{r}
-me2 <- lmer(y ~ x + (1|id), data = d2, REML = FALSE)
-```
-
-Recall we simulated our data using random effects of 1.5 and 2.
-
-The ML estimates are lower than the REML estimates. We can view the model random effects estimates using the `VarCorr()` function.
-
-```{r}
-# ML
-VarCorr(me2)
-```
-
-Notice the REML estimates are slightly higher and closer to the true values.
-
-```{r}
-# REML
-VarCorr(me1)
-```
-
-The fixed effect estimates are the same.
-
-```{r}
-cbind("me1" = fixef(me1), "me2" = fixef(me2))
-```
-
-So why is ML even available to use as an estimator if it returns biased estimators? It turns out that REML is not a suitable estimator when comparing models that differ _only in their fixed effects_. We will see this in action later in the workshop.
-
-If you have a good amount of data and propose a reasonable model, the difference in ML and REML estimation will likely be slight. Doug Bates, the author of the {lme4} package, had this to say about REML on the R mixed models mailing list back in 2015:
-
-"I will admit that the original sin, the REML criterion, was committed by statisticians. In retrospect I wish that we had not incorporated that criterion into the nlme and lme4 packages but, at the time we wrote them, our work would have been dismissed as wrong if our answers did not agree with SAS PROC MIXED, etc. So we opted for bug-for-bug compatibility with existing software."
-
-https://stat.ethz.ch/pipermail/r-sig-mixed-models/2015q3/023743.html
+This is one way to think of mixed-effect/multilevel modeling: trying to work backward to determine or approximate the data generation process. Our example was simple and we knew the data generating process because we simulated the data.  In real life we never know if our model is correct (spoiler: it never is). At best we hope build a model that approximates the data generation process.
 
 
 ## Checking assumptions
@@ -238,6 +217,8 @@ Check constant variance for Subjects (aka, subject-specific noise). Boxplots sho
 plot(me1, id ~ resid(.))
 ```
 
+The above plot is not useful if you have, day, hundreds of subjects.
+
 To assess that the Residuals (aka, observation-specific noise) are approximately Normal, we need to use a function in the lattice package called `qqmath()`. (The {lattice} package comes with R.) The points should lie close to the diagonal line. The syntax `lattice::` allows us to access the function from the package without loading the package. This plot looks great because we generated the Residual noise from a Normal distribution.  
 
 ```{r}
@@ -252,7 +233,7 @@ lattice::qqmath(ranef(me1))
 
 This is similar to the previous plot but only has 7 points (one for each subject). It also has a +/- 1 standard deviation bar to give some sense of the uncertainty in the estimate of each subject's random effect. We'd like those points to roughly form a diagonal line.
 
-Violations of these assumptions usually mean we have a poor model. Sometimes we can try transforming the dependent variable, including an interaction, or allowing non-linear effects. But sometimes there's nothing we can do. The variation in the dependent variable may not be well explained by the candidate predictor variables. 
+Violations of these assumptions, especially the constant variance assumption, usually mean we have a poor model. Sometimes we can try transforming the dependent variable, including an interaction, or allowing non-linear effects. But sometimes there's nothing we can do. The variation in the dependent variable may not be well explained by the candidate predictor variables. 
 
 ## Using our model for predictions
 
@@ -281,29 +262,24 @@ To make a prediction for a specific subject _using their random intercept_, we d
 predict(me1, newdata = data.frame(x = 3, id = 3))
 ```
 
-From the lme4 documentation for predict: "There is no option for computing standard errors of predictions because it is difficult to define an efficient method that incorporates uncertainty in the variance parameters." That means we cannot simply ask for confidence intervals for our predictions. We can however use the bootstrap. (see _Using Simulation with Mixed-Effect Models section_ below)
+From the {lme4} documentation for predict: "There is no option for computing standard errors of predictions because it is difficult to define an efficient method that incorporates uncertainty in the variance parameters." That means we cannot simply ask for confidence intervals for our predictions. We can however use the bootstrap. (see _Using Simulation with Mixed-Effect Models section_ below)
 
-We can also visualize this model with ggeffects. _By default it assumes predictions do NOT make use of random effects_. Below we use `ggpredict` to make predictions for various values of x, and pipe the result into `plot`. The `add.data` argument adds the raw data to the plot.
+(However, as of version 1.1-35, there is an experimental argument available to estimate standard errors for predictions: `se.fit`)
+
+We can also visualize this model with ggeffects. _By default it assumes predictions do NOT make use of each subject's random effect_. Below we use `ggpredict` to make predictions for various values of x, and pipe the result into `plot`. The `add.data` argument adds the raw data to the plot.
 
 ```{r}
 ggpredict(me1, terms = "x") |>
-  plot(add.data = TRUE)
+  plot(show_data = TRUE)
 ```
 
 To incorporate the additional uncertainty due to each subject's random effect, we set `type = "random"` (for "random effects"). Notice the confidence ribbon is much wider.
 
 ```{r}
 ggpredict(me1, terms = "x", type = "random") |>
-  plot(add.data = TRUE)
+  plot(show_data = TRUE)
 ```
 
-
-It takes more work to get fitted lines for each subject. We need to specify `type = "random"` and add "id" to the `terms` argument. Notice each fitted line has a different intercept but the same slope. (Honestly, this isn't something that's done very often in practice.)
-
-```{r}
-ggpredict(me1, terms = c("x", "id"), type = "random") |> 
-  plot(ci = FALSE, add.data = TRUE)
-```
 
 
 ## CODE ALONG 1
@@ -322,23 +298,16 @@ Add new R code chunks by clicking the *Insert Chunk* button on the toolbar or by
 1. Visualize the data using ggplot2. Group by id.
 
 
-
 2. Model y as a function of x with a random intercept conditional on id. Call the model `me3`.
-
 
 
 3. Check the constant variance assumption for the observations. What do you think?
 
 
-
-
 4. Now fit a model that assumes the subject exerts a random effect on both the intercept and slope, using the formula `y ~ x + (x|id)`. Call the model `me4`.
 
 
-
 5. Check the assumption of constant variance for the observation random effect for `me4`. What do you think?
-
-
 
 
 6. View the coefficients of `me4`. Notice each subject has their own intercept and slope.
@@ -355,7 +324,8 @@ The following data consist of 5 weekly measurements of body weight for 27 rats. 
 ```{r}
 URL2 <- "https://raw.githubusercontent.com/clayford/mixeff_modeling_with_r/main/data/ratdrink.csv"
 ratdrink <- read.csv(URL2)
-ratdrink$subject <- as.character(ratdrink$subject)
+ratdrink$subject <- factor(ratdrink$subject)
+ratdrink$treat <- factor(ratdrink$treat)
 str(ratdrink)
 ```
 
@@ -365,7 +335,7 @@ Let's visualize the data grouped by rat. It appears the trajectories of growth c
 
 ```{r}
 ggplot(ratdrink) +
-  aes(x=weeks, y=wt, color=treat, group=subject) +
+  aes(x = weeks, y = wt, color = treat, group = subject) +
   geom_point() + 
   geom_line()
 ```
@@ -406,7 +376,7 @@ Let's plot the fitted model using ggeffects.
 
 ```{r}
 ggpredict(lmm1, terms = c("weeks", "treat")) |> 
-  plot(ci = FALSE, add.data = TRUE)
+  plot(show_ci = FALSE, show_data = TRUE)
 ```
 
 It appears we may need to let the trajectory over weeks vary by treatment. We can do that with an interaction.
@@ -429,10 +399,7 @@ It appears we may need to let the trajectory over weeks vary by treatment. We ca
 
 
 
-
 4. what's the expected mean weight of a rat at week 4 for each treatment?
-
-
 
 
 
@@ -456,10 +423,6 @@ Since we have interactions, it takes some work to interpret the coefficients.
 - The `treatthiouracil:weeks` coefficient is what we _add_ to the `weeks` coefficient to the expected amount of weight in grams a rat in the thiouracil group adds each week: about 26.5 + -9.4 = 17.1 grams
 
 The same calculations can be done for the thyroxine coefficients.
-
-The "Std. Error" column quantifies the uncertainty in the coefficient. The "t value" is the ratio Estimate/Std. Error. A t value greater than about 3 in absolute value provides evidence the estimated coefficient is different from 0. In other words, it's more than three standard errors away from 0.
-
-_Where are the p-values?_ In mixed-effect models the distribution of t values for the null hypothesis is not known, at least not for unbalanced data. P-values can be approximated (sometimes), but not calculated precisely. The {lme4} authors elected to not output p-values. Probably better to look at confidence intervals anyway. (See _Appendix_ for a package that outputs approximate/questionable p-values, {lmerTest})
 
 We can get confidence intervals for the coefficients by using the `confint()` function. Notice we get confidence intervals for the random effect estimates as well. Setting `oldNames = FALSE` returns more informative names for the random effects.
 
@@ -569,9 +532,19 @@ One option is to use the {RLRsim} package, which provides simulation-based exact
 
 1. Update model lmm4 with a non-linear effect on weeks using `poly(weeks, 2)`. This is a second degree polynomial. Call the model `lmm5`.
 
+```{r}
+formula(lmm4)
+lmm5 <- lmer(wt ~ treat * poly(weeks,2) + (1 | subject) + 
+               (0 + weeks | subject), data = ratdrink)
+```
+
 
 
 2. How does this model compare to `lmm4`, which has a simple linear effect on weeks?
+
+```{r}
+anova(lmm4, lmm5)
+```
 
 
 
@@ -579,9 +552,18 @@ One option is to use the {RLRsim} package, which provides simulation-based exact
 
 Let's say we're happy with model `lmm4`. It's good enough. How can we use that model to make comparisons between treatments at certain times? How can we compare trends over time between treatments?  
 
-A package that is useful for this is the {emmeans} package. That's short for Estimated Marginal Means. {emmeans} is a large and powerful package. We show two basic uses in this example.
+We can use effect plots to visualize the model. They are indispensable for understanding interactions and non-linear effects. The {ggeffects} package makes this super easy to create some basic plots. The most simple usage is to call the `ggpredict()` function on your model and specify which terms to visualize in a vector. The first term will form the x-axis, the second will form the groups. Then pipe the result into the {ggeffects} `plot()` method.
 
-It appears at week 4, the end of the observation period, rats on thiouracil weigh less than rats on the other two treatments. How much less? We use the `emmeans()` function to analyze this. It takes a fitted model as the first argument. The second argument uses {emmeans} syntax to specify we want `pairwise` comparisons between all three treatments. The `at` argument allows us to specify at what time point we want to make the comparisons. Notice this needs to be a data frame. (The note about results being misleading can be ignored since we set the `at` argument.)
+```{r}
+ggpredict(lmm4, terms = c("weeks", "treat")) |>
+  plot()
+```
+
+Notice the trend over time for the thiouracil group is less pronounced. That's the interaction at work. It appears at week 4, the end of the observation period, rats on thiouracil weigh less than rats on the other two treatments. How much less? 
+
+The {emmeans} package can help us answer that. "emmeans" is short for Estimated Marginal Means. {emmeans} is a large and powerful package. We show two basic uses in this example.
+
+The `emmeans()` function takes a fitted model as the first argument. The second argument uses {emmeans} syntax to specify we want `pairwise` comparisons between all three treatments. The `at` argument allows us to specify at what time point we want to make the comparisons. Notice this needs to be a data frame. (The note about results being misleading can be ignored since we set the `at` argument.)
 
 ```{r}
 emmeans(lmm4, pairwise ~ treat, at = data.frame(weeks = 4))
@@ -612,15 +594,6 @@ emtrends(lmm4, pairwise ~ treat, var = "weeks") |>
 ```
 
 The difference in trend looks to be at least 5 between thioruacil and the other two groups. We might say expected weight gain for rats on thiouracil is about 5 - 15 grams less than thyroxine and the control groups.
-
-Effect plots are useful for visualizing mixed-effect models. They are indispensable for understanding interactions and non-linear effects. The {ggeffects} package makes this super easy to create some basic plots. The most simple usage is to call the `ggpredict()` function on your model and specify which terms to visualize in a vector. The first term will form the x-axis, the second will form the groups. Then pipe the result into the {ggeffects} `plot()` method.
-
-```{r}
-ggpredict(lmm4, terms = c("weeks", "treat")) |>
-  plot()
-```
-
-Notice the trend over time for the thiouracil group is less pronounced. That's the interaction at work. 
 
 Recall model lmm5 that had a non-linear effect on weeks. Let's visualize that model. We specify `weeks[all]` to get a smooth plot.
 
@@ -674,7 +647,7 @@ It doesn't look horrible, but in the 100 - 200 range the observed data does not 
 
 ### Confidence intervals on predictions
 
-Another use for simulation is to approximate confidence intervals for predictions. Recall the usual `predict` method for `lmer()` models does not compute standard errors, and hence does not calculate confidence intervals.
+Another use for simulation is to approximate confidence intervals for predictions. Recall the usual `predict` method for `lmer()` models does not calculate confidence intervals.
 
 To do this we'll use the `bootMer()` function that comes with lme4. This is like `simulate()` but goes a step further. After each simulation of new responses, _a new model is refit_. Once we fit a new model, we can make a prediction. We can then repeat this process many times to get many simulated predictions. We can then use all those predictions to make inference about the uncertainty of our predictions. This is referred to as a _model-based bootstrapping_. And it's probably easier to understand with a demonstration.
 
@@ -683,33 +656,33 @@ Let's say we want to calculate a confidence interval on the difference in means 
 Here's how we can get an estimate of the difference by simply subtracting the result from one `predict()` from another.
 
 ```{r}
-nd1 <- data.frame(treat="thiouracil", weeks=4)
-nd2 <- data.frame(treat="thyroxine", weeks=4)
-predict(lmm5, newdata = nd1, re.form=NA) -
-                     predict(lmm5, newdata = nd2, re.form=NA)
+nd1 <- data.frame(treat = "thiouracil", weeks = 4)
+nd2 <- data.frame(treat = "thyroxine", weeks = 4)
+predict(lmm5, newdata = nd1, re.form = NA) -
+                     predict(lmm5, newdata = nd2, re.form = NA)
 ```
 
 How can we get a confidence interval on that difference? Here's one way using `bootMer()`.
 
-First we tell the `bootMer()` function to use the `lmm5` model to simulate data and then refit the model. The `FUN` argument tells `bootMer()` what to do with the newly fit model. In this case, make a prediction using our two datasets and take the difference. The `nsim` argument says do it 100 times. (We would typically do something like a 1000, but in the interest of time we do 100.). The `.progress` argument says output a text-based progress bar so we can keep tabs on progress.
+First we tell the `bootMer()` function to use the `lmm5` model to simulate data and then refit the model. The `FUN` argument tells `bootMer()` what to do with the newly fit model. In this case, make a prediction using our two datasets and take the difference. The `nsim` argument says do it 200 times. (We would typically do something like a 1000, but in the interest of time we do 200.). The `.progress` argument says output a text-based progress bar so we can keep tabs on progress.
 
 ```{r}
 b.out <- bootMer(x = lmm5, 
                  FUN = function(x){
                    predict(x, newdata = nd1, re.form=NA) -
                      predict(x, newdata = nd2, re.form=NA)}, 
-                 nsim = 100, 
+                 nsim = 200, 
                  .progress = "txt")
 ```
 
-When this finishes running the `b.out` object is a list with several objects. The `t` object is the vector of differences. Using the quantile function we can extract the 2.5% and 97.5% percentiles to construct a confidence interval.
+When this finishes running the `b.out` object is a list with several objects. The `t` object is the vector of differences. Using the `quantile()` function we can extract the 2.5% and 97.5% percentiles to construct a confidence interval.
 
 ```{r}
 head(b.out$t)
 quantile(b.out$t, probs = c(0.025, 0.975))
 ```
 
-We estimate an expected mean difference of [-51.9, -29.5]. Compare this to the 95% confidence interval returned by {emmeans} which uses the Kenward-Roger approximation. That CI is [-60.0, -19.7], which is much wider.
+Compare the 95% bootstrap confidence interval to the 95% confidence interval returned by {emmeans} which uses something called the "Kenward-Roger approximation". The bootstrap CI is much tighter compared to the approximated CI [-60.0, -19.7].
 
 ```{r}
 emm_out <- emmeans(lmm5, pairwise ~ treat, at = data.frame(weeks = 4)) |>
@@ -730,7 +703,7 @@ nd <- data.frame(treat = "thiouracil", weeks = 3:4)
 diff(predict(lmm5, newdata = nd, re.form = NA))
 ```
 
-Now use `bootMer()` to perform this 100 times using newly fitted models from simulated responses. Save the result to `b.out2`. When done, use the quantile function to get an approximate confidence interval.
+Now use `bootMer()` to perform this 200 times using newly fitted models from simulated responses. Save the result to `b.out2`. When done, use the quantile function to get an approximate confidence interval.
 
 
 
@@ -755,6 +728,45 @@ Register for the Research Data Services newsletter: http://data.library.virginia
 
 
 ## Appendix
+
+### REML vs ML
+
+In the model output above it says "Linear mixed model fit by REML". REML is an acronym for _Restricted Maximum Likelihood_. This is a type of estimation procedure. An alternative estimation procedure is ML, or _Maximum Likelihood_. The ML procedure returns biased estimates of the random effects. They're estimated to be _smaller_ than they really are. REML generally returns less biased estimates. If data are _balanced_, that is we have equal number of observations on subjects/clusters, the REML and ML estimates are about the same. We can fit a model using ML by setting `REML = FALSE`
+
+```{r}
+me2 <- lmer(y ~ x + (1|id), data = d2, REML = FALSE)
+```
+
+Recall we simulated our data using random effects of 1.5 and 2.
+
+The ML estimates are lower than the REML estimates. We can view the model random effects estimates using the `VarCorr()` function.
+
+```{r}
+# ML
+VarCorr(me2)
+```
+
+Notice the REML estimates are slightly higher and closer to the true values.
+
+```{r}
+# REML
+VarCorr(me1)
+```
+
+The fixed effect estimates are the same.
+
+```{r}
+cbind("me1" = fixef(me1), "me2" = fixef(me2))
+```
+
+So why is ML even available to use as an estimator if it returns biased estimators? It turns out that REML is not a suitable estimator when comparing models that differ _only in their fixed effects_. We will see this in action later in the workshop.
+
+If you have a good amount of data and propose a reasonable model, the difference in ML and REML estimation will likely be slight. Doug Bates, the author of the {lme4} package, had this to say about REML on the R mixed models mailing list back in 2015:
+
+"I will admit that the original sin, the REML criterion, was committed by statisticians. In retrospect I wish that we had not incorporated that criterion into the nlme and lme4 packages but, at the time we wrote them, our work would have been dismissed as wrong if our answers did not agree with SAS PROC MIXED, etc. So we opted for bug-for-bug compatibility with existing software."
+
+https://stat.ethz.ch/pipermail/r-sig-mixed-models/2015q3/023743.html
+
 
 ### Approximate p-values with lme4
 
