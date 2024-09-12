@@ -92,7 +92,7 @@ We might say the estimated _fixed effects_ are about 2.75 and 2.08, and the esti
 
 This is one way to think of linear modeling or regression: we try to recover or approximate the process that generated the data. 
 
-If we like we can fit this model to the data using the ggeffects package.
+If we like we can fit this model to the data using the {ggeffects} package. Below `|>` is the pipe operator. Take the output of one function and pass it to the first argument of the next function.
 
 ```{r}
 ggpredict(m, terms = "x") |>
@@ -105,31 +105,39 @@ This is one way to think of linear modeling or regression: we try to recover the
 
 ## Motivation for mixed-effect/multilevel models
 
-Pretend the previous example data was for one subject. What if we had 7 subjects, each with 10 observations? 
+Pretend the previous example data was for one subject. What if we had 7 subjects, each with 10 observations? How might we simulate data for that scenario?
 
-Let's simulate data where we add noise to the intercept that's _specific to each subject_. In other words each subject has their own _random effect_ on the intercept. 
+One approach: simulate data where we add noise to the intercept that's _specific to each subject_. In other words each subject has their own _random effect_ on the intercept. 
 
+First let's generate an id variable to identify subjects. We can generate 7 id numbers, 10 each, using the `gl()` function.
 
 ```{r}
-# generate 7 id numbers, 10 each (10 obs on each "subject")
-# gl() function "generates levels"
 id <- gl(n = 7, k = 10)
+```
 
-# generate an independent variable
-# repeat 1:10 7 times
+Next we generate an independent predictor variable, which is simply the numbers 1 - 10. We use the `rep()` to replicate the vector 1:10 7 times.
+
+```{r}
 x <- rep(1:10, 7)
+```
 
-# generate a random effect specific to each observation 
-# 7 subjects, each with 10 observations (n = 10 * 7)
+Now we generate noise specific to each observation. We'll draw a sample of size 7*10 = 70 from a Normal distribution with mean 0 and standard deviation 1.5. `set.seed(2)` ensures we all generate the same "random" data.
+
+```{r}
 set.seed(2)
 obs_noise <- rnorm(7 * 10, mean = 0, sd = 1.5)
+```
 
-# generate a random effect specific to each subject (n = 7)
+We also generate noise specific to _each subject_. We'll draw a sample of size 7 from a Normal distribution with mean 0 and standard deviation 2.
+
+```{r}
 set.seed(3)
 subj_noise <- rnorm(7, mean = 0, sd = 2)
+```
 
-# generate y; add subject random effect to intercept;
-# rand_int[id] uses id as index numbers to repeat subj_noise values
+Finally we generate `y` as a function of `x`, but this time we add the subject-specific noise to the _intercept_. The syntax `subj_noise[id]` uses id as index numbers to repeat subj_noise values.
+
+```{r}
 y <- (3 + subj_noise[id]) + 2*x + obs_noise
 d2 <- data.frame(id, y, x)
 ```
@@ -149,9 +157,7 @@ head(d2)
 ```
 
 
-Let's visualize the data. We have lines with _different intercepts_ but similar slopes. That's because _we added each subject's random effect to the fixed intercept_. Any differences in slopes are due to random effects associated with each observation.
-
-The argument `method = "lm"` below adds a regression line to each subject's values. The argument `se = FALSE` suppresses confidence bands.
+Let's visualize the data using {ggplot2}. The argument `method = "lm"` below adds a regression line to each subject's values. The argument `se = FALSE` suppresses confidence bands.
 
 ```{r}
 ggplot(d2) +
@@ -159,6 +165,8 @@ ggplot(d2) +
   geom_point() +
   geom_smooth(method = "lm", se = FALSE)
 ```
+
+We have lines with _different intercepts_ but similar slopes. That's because _we added each subject's random effect to the fixed intercept_. Any differences in slopes are due to random effects associated with each observation.
 
 How do we "work backwards" as we did with the simple linear model and recover the true intercept, slope and two random effect parameters?
 
@@ -203,21 +211,29 @@ Notice two assumptions that `lmer()` made:
 1. The variance (noise) is constant for random effects
 2. The variance (noise) comes from a Normal distribution for random effects
 
+```
+Random effects:
+ Groups   Name        Variance Std.Dev.
+ id       (Intercept) 1.338    1.157   
+ Residual             3.221    1.795   
+Number of obs: 70, groups:  id, 7
+```
+
 We can assess those assumptions with _diagnostic plots_.
 
-Check constant variance for Residuals (aka, observation-specific noise). Points should be evenly scattered around 0. This plot looks great because we generated the data using constant variance to generate observation-specific noise.  
+Check _constant variance for Residuals_ (aka, observation-specific noise). Points should be evenly scattered around 0. This plot looks great because we generated the data using constant variance to generate observation-specific noise.  
 
 ```{r}
 plot(me1)
 ```
 
-Check constant variance for Subjects (aka, subject-specific noise). Boxplots should be evenly scattered around 0 for each subject. The syntax `id ~ resid(.)` means plot residuals by subject id. This plot also looks great because we generated the data using constant variance to generate subject-specific noise.
+Check _constant variance for Subjects_ (aka, subject-specific noise). Boxplots should be evenly scattered around 0 for each subject. The syntax `id ~ resid(.)` means plot residuals by subject id. This plot also looks great because we generated the data using constant variance to generate subject-specific noise.
 
 ```{r}
 plot(me1, id ~ resid(.))
 ```
 
-The above plot is not useful if you have, day, hundreds of subjects.
+The above plot is not useful if you have, say, hundreds of subjects.
 
 To assess that the Residuals (aka, observation-specific noise) are approximately Normal, we need to use a function in the lattice package called `qqmath()`. (The {lattice} package comes with R.) The points should lie close to the diagonal line. The syntax `lattice::` allows us to access the function from the package without loading the package. This plot looks great because we generated the Residual noise from a Normal distribution.  
 
@@ -249,24 +265,28 @@ _Predictions with mixed-effect/multilevel models require extra thought_. We need
 - for any subject, or 
 - for a particular subject, such as subject 3 (id = 3)?
 
-To make a prediction for any subject, perhaps a new subject who wasn't sampled, we specify `re.form=NA`. This says just use fixed effects to make a prediction. Predict expected y when x = 3 for _any subject_:
+To make a _prediction for any subject_, perhaps a new subject who wasn't sampled, we specify `re.form=NA`. This says just use fixed effects to make a prediction. This is usually how mixed-effect models are used when making predictions. Predict expected y when x = 3 for _any subject_:
 
 ```{r}
 predict(me1, newdata = data.frame(x = 3),
         re.form=NA)
 ```
 
-To make a prediction for a specific subject _using their random intercept_, we drop the `re.form=NA` argument and include `id` in our new data frame. Predict expected y when x = 3 for _for subject 3 (id = 3)_.
+To make a _prediction for a specific subject_, we drop the `re.form=NA` argument and include `id` in our new data frame. Predict expected y when x = 3 for _for subject 3 (id = 3)_.
 
 ```{r}
 predict(me1, newdata = data.frame(x = 3, id = 3))
 ```
 
-From the {lme4} documentation for predict: "There is no option for computing standard errors of predictions because it is difficult to define an efficient method that incorporates uncertainty in the variance parameters." That means we cannot simply ask for confidence intervals for our predictions. We can however use the bootstrap. (see _Using Simulation with Mixed-Effect Models section_ below)
+There is no option for confidence intervals. From the {lme4} documentation for predict: "There is no option for computing standard errors of predictions because it is difficult to define an efficient method that incorporates uncertainty in the variance parameters." That means we cannot simply ask for confidence intervals for our predictions. We can however use the bootstrap. (see _Using Simulation with Mixed-Effect Models section_ below)
 
-(However, as of version 1.1-35, there is an experimental argument available to estimate standard errors for predictions: `se.fit`)
+(However, as of version 1.1-35, there is an experimental argument available to estimate standard errors for predictions: `se.fit = TRUE`) To see what version of {lme4} you have:
 
-We can also visualize this model with ggeffects. _By default it assumes predictions do NOT make use of each subject's random effect_. Below we use `ggpredict` to make predictions for various values of x, and pipe the result into `plot`. The `add.data` argument adds the raw data to the plot.
+```{r}
+packageVersion("lme4")
+```
+
+We can also visualize this model with ggeffects. _By default it assumes predictions do NOT make use of each subject's random effect_. Below we use `ggpredict` to make predictions for various values of x, and pipe the result into `plot`. The `show_data` argument adds the raw data to the plot.
 
 ```{r}
 ggpredict(me1, terms = "x") |>
@@ -289,7 +309,7 @@ Run the following code to load a new data set.
 ```{r}
 URL <- "https://raw.githubusercontent.com/clayford/mixeff_modeling_with_r/main/data/d.csv"
 d3 <- read.csv(URL)
-d3$id <- as.character(d3$id)
+d3$id <- factor(d3$id)
 str(d3)
 ```
 
@@ -408,7 +428,7 @@ It appears we may need to let the trajectory over weeks vary by treatment. We ca
 Recall the model summary from CODE ALONG 2:
 
 ```{r}
-lmm2 <- lmer(wt ~ treat * weeks + (1 | subject), data=ratdrink)
+lmm2 <- lmer(wt ~ treat + weeks + treat:weeks + (1 | subject), data=ratdrink)
 summary(lmm2, corr = FALSE)
 ```
 
@@ -459,16 +479,17 @@ Technically model lmm1 is _nested_ within lmm2. It's a version of lmm2 where the
 anova(lmm1, lmm2)
 ```
 
-Notice both models are refit using ML. However the test statistic and p-value may be questionable. The Chisq test statistic is merely an approximation. In this case we would probably prefer to compare AIC/BIC values. 
+Notice both models are refit using ML. (See REML vs ML in the Appendix below.) However the test statistic and p-value may be questionable. The Chisq test statistic is an approximation. In this case we would probably prefer to compare AIC/BIC values. 
 
-AIC stands for Akaike Information Criterion. BIC stands for Bayesian Information Criterion. (See Appendix of this document for more information.) These are basically measures of how well the model would fit new data. Lower values mean a better "fit". An AIC/BIC value by itself doesn't mean much. But if we have multiple AIC/BIC values from different models fit to the same data with the same response, we can use them to help us select a "preferred" model. According to AIC/BIC, the model with the interaction appears to be decisively better.
+AIC stands for Akaike Information Criterion. BIC stands for Bayesian Information Criterion. (See Appendix of this document for more information.) These are basically measures of _how well the model would fit new data_. Lower values mean a better "fit". An AIC/BIC value by itself doesn't mean much. But if we have multiple AIC/BIC values from different models fit to the same data with the same response, we can use them to help us select a "preferred" model. According to AIC/BIC, the model with the interaction appears to be decisively better.
 
 Now let's compare models that differ only in their random effects.
 
-The lmm2 model allowed for one random effect on the intercept. Let's fit a new model that allows a random effect on weeks as well. We can do that by specifying `(weeks | subject)`. This says the effect of weeks is conditional on each rat. By default this will also estimate subject random effect on the intercept!
+The lmm2 model allowed for one random effect on the intercept. Let's fit a new model that allows a random effect on weeks as well. We can do that by specifying `(weeks | subject)`. This says the effect of weeks is conditional on each rat. By default this will also estimate subject random effect on the intercept.
 
 ```{r}
-lmm3 <- lmer(wt ~ treat * weeks + (weeks | subject), data=ratdrink)
+lmm3 <- lmer(wt ~ treat + weeks + treat:weeks + (weeks | subject),
+             data=ratdrink)
 summary(lmm3, corr = FALSE)
 ```
 
@@ -478,7 +499,7 @@ Under Random Effects we have _three estimates_ of "noise" or variance:
 2. subject random effect on the weeks coefficient
 3. correlation between the two subject random effects.
 
-The correlation estimate is small, only -0.133. Correlated random effects in this case means that subjects' random effects on the intercept and weeks coefficients are associated. For example, if one subject has a large random effect on the intercept, they may have a small random effect on the weeks coefficient. That would be a negative correlation.
+The correlation estimate is small, only -0.13. Correlated random effects in this case means that subjects' random effects on the intercept and weeks coefficients are associated. For example, if one subject has a large random effect on the intercept, they may have a small random effect on the weeks coefficient. That would be a negative correlation.
 
 Let's look at the confidence intervals on the three random effects. We can specify we just want random effects by specifying `parm = "theta_"`.
 
@@ -491,15 +512,17 @@ The confidence interval on the correlation is wide and uncertain. I don't think 
 Let's fit a model with _no correlation between random effects_. To do this we can use two pipes in the random effects formula: `(weeks || subject)`. (This only works for numeric predictors.)
 
 ```{r}
-lmm4 <- lmer(wt ~ treat * weeks + (weeks || subject), data=ratdrink)
+lmm4 <- lmer(wt ~ treat + weeks + treat:weeks + (weeks || subject),
+             data=ratdrink)
 ```
 
 An alternative way to specify the model is to explicitly state two random effects: one for the intercept and one for weeks. Because the intercept random effect is fit by default, we can use `0 + weeks` to suppress it.
 
 ```{r}
-lmm4 <- lmer(wt ~ treat * weeks + (1 | subject) + (0 + weeks | subject),
+lmm4 <- lmer(wt ~ treat + weeks + treat:weeks + 
+               (1 | subject) + (0 + weeks | subject),
              data=ratdrink)
-summary(lmm4)
+summary(lmm4, corr = FALSE)
 ```
 
 If we look at the coefficients, each rat now has their own intercept and weeks coefficients. 
@@ -532,19 +555,8 @@ One option is to use the {RLRsim} package, which provides simulation-based exact
 
 1. Update model lmm4 with a non-linear effect on weeks using `poly(weeks, 2)`. This is a second degree polynomial. Call the model `lmm5`.
 
-```{r}
-formula(lmm4)
-lmm5 <- lmer(wt ~ treat * poly(weeks,2) + (1 | subject) + 
-               (0 + weeks | subject), data = ratdrink)
-```
-
-
 
 2. How does this model compare to `lmm4`, which has a simple linear effect on weeks?
-
-```{r}
-anova(lmm4, lmm5)
-```
 
 
 
@@ -552,7 +564,7 @@ anova(lmm4, lmm5)
 
 Let's say we're happy with model `lmm4`. It's good enough. How can we use that model to make comparisons between treatments at certain times? How can we compare trends over time between treatments?  
 
-We can use effect plots to visualize the model. They are indispensable for understanding interactions and non-linear effects. The {ggeffects} package makes this super easy to create some basic plots. The most simple usage is to call the `ggpredict()` function on your model and specify which terms to visualize in a vector. The first term will form the x-axis, the second will form the groups. Then pipe the result into the {ggeffects} `plot()` method.
+We can use effect plots to visualize the model. They are indispensable for understanding interactions and non-linear effects. The {ggeffects} package makes it easy to create some basic plots. The most simple usage is to call the `ggpredict()` function on your model and specify which terms to visualize in a vector. The first term will form the x-axis, the second will form the groups. Then pipe the result into the {ggeffects} `plot()` method.
 
 ```{r}
 ggpredict(lmm4, terms = c("weeks", "treat")) |>
@@ -594,15 +606,6 @@ emtrends(lmm4, pairwise ~ treat, var = "weeks") |>
 ```
 
 The difference in trend looks to be at least 5 between thioruacil and the other two groups. We might say expected weight gain for rats on thiouracil is about 5 - 15 grams less than thyroxine and the control groups.
-
-Recall model lmm5 that had a non-linear effect on weeks. Let's visualize that model. We specify `weeks[all]` to get a smooth plot.
-
-```{r}
-ggpredict(lmm5, terms = c("weeks[all]", "treat")) |>
-  plot()
-```
-
-Notice the slight bend in the thiouracil fitted line. That's both the interaction and non-linear effect at work.
 
 
 ## Using Simulation with Mixed-Effect Models
@@ -649,7 +652,7 @@ It doesn't look horrible, but in the 100 - 200 range the observed data does not 
 
 Another use for simulation is to approximate confidence intervals for predictions. Recall the usual `predict` method for `lmer()` models does not calculate confidence intervals.
 
-To do this we'll use the `bootMer()` function that comes with lme4. This is like `simulate()` but goes a step further. After each simulation of new responses, _a new model is refit_. Once we fit a new model, we can make a prediction. We can then repeat this process many times to get many simulated predictions. We can then use all those predictions to make inference about the uncertainty of our predictions. This is referred to as a _model-based bootstrapping_. And it's probably easier to understand with a demonstration.
+To do this we'll use the `bootMer()` function that comes with lme4. This is like `simulate()` but goes a step further. After each simulation of new responses, _a new model is refit_. Once we fit a new model, we can make a prediction. We can then repeat this process many times to get many simulated predictions. We can then use all those predictions to make inference about the uncertainty of our predictions. This is referred to as _model-based bootstrapping_. And it's probably easier to understand with a demonstration.
 
 Let's say we want to calculate a confidence interval on the difference in means between thiouracil and thyroxine at week 4 using our `lmm5` model.
 
@@ -662,7 +665,7 @@ predict(lmm5, newdata = nd1, re.form = NA) -
                      predict(lmm5, newdata = nd2, re.form = NA)
 ```
 
-How can we get a confidence interval on that difference? Here's one way using `bootMer()`.
+Rats on thiouracil are about 40 grams lighter than rats on thyroxine. But how can we get a confidence interval on that difference? Here's one way using `bootMer()`.
 
 First we tell the `bootMer()` function to use the `lmm5` model to simulate data and then refit the model. The `FUN` argument tells `bootMer()` what to do with the newly fit model. In this case, make a prediction using our two datasets and take the difference. The `nsim` argument says do it 200 times. (We would typically do something like a 1000, but in the interest of time we do 200.). The `.progress` argument says output a text-based progress bar so we can keep tabs on progress.
 
