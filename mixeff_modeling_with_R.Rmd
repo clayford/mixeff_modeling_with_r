@@ -49,7 +49,7 @@ Appendix Topics (topics cut for time)
 
 ## Load packages
 
-We're going to use the following packages in this workshop. Let's load them.
+We're going to use the following packages in this workshop. 
 
 ```{r}
 library(lme4)
@@ -121,7 +121,7 @@ Next we generate an independent predictor variable, which is simply the numbers 
 x <- rep(1:10, 7)
 ```
 
-Now we generate noise specific to each observation. We'll draw a sample of size 7*10 = 70 from a Normal distribution with mean 0 and standard deviation 1.5. `set.seed(2)` ensures we all generate the same "random" data.
+Now we generate noise specific to _each observation_. We'll draw a sample of size 7*10 = 70 from a Normal distribution with mean 0 and standard deviation 1.5. `set.seed(2)` ensures we all generate the same "random" data.
 
 ```{r}
 set.seed(2)
@@ -172,9 +172,9 @@ How do we "work backwards" as we did with the simple linear model and recover th
 
 **Linear Mixed-Effect Models, or Multilevel Models**
 
-Because we are dealing with models with a mix of fixed and random effects, we sometimes call these **Mixed-Effect Models**. Another name is **Multilevel Models** because we're dealing with different levels of observations. (eg, we observe 7 subjects, but also observe 10 observations on each subject.)
+Because we are dealing with models with a mix of fixed and random effects, we sometimes call these **Mixed-Effect Models**. Another name is **Multilevel Models** because we're dealing with different levels of observations. (eg, we observe 10 observations [Level 1] on each subject [Level 2].)
 
-Two popular packages used to fit mixed-effect models are {nlme} and {lme4}. The {nlme} package comes with base R. The {lme4} package needs to be installed. Both were developed by the same author, Doug Bates. The {lme4} package came later. It has an easier modeling syntax and works better for larger data sets. But {nlme} can fit certain models that {lme4} can't fit, and vice versa. We'll use {lme4} today but that doesn't mean {nlme} is obsolete. 
+Two popular R packages used to fit mixed-effect models are {nlme} and {lme4}. The {nlme} package comes with base R. The {lme4} package needs to be installed. Both were developed by the same author, Doug Bates. The {lme4} package came later. It has an easier modeling syntax and works better for larger data sets. But {nlme} can fit certain models that {lme4} can't fit, and vice versa. We'll use {lme4} today but that doesn't mean {nlme} is obsolete. 
 
 Below we model y as a function of x plus an intercept (1) that is conditional on id (the subject) using the `lmer()` function from the {lme4} package. Notice this is the _correct model_! The y value really is a function of x plus an intercept that varies between subjects. The syntax `(1|id)` means "the intercept is conditional on the id." Each subject exerts a random effect on the intercept.
 
@@ -189,7 +189,7 @@ The Standard Error column estimates the uncertainty in the coefficients. For exa
 
 The "t value" column is the ratio Estimate/Std. Error. A t value greater than about 3 in absolute value provides evidence the estimated coefficient is different from 0. In other words, it's more than three standard errors away from 0.
 
-_Where are the p-values?_ In mixed-effect models the distribution of t values for the null hypothesis is not known, at least not for unbalanced data. P-values can be approximated (sometimes), but not calculated precisely. The {lme4} authors elected to not output p-values. Probably better to look at confidence intervals anyway. See _Appendix_ for a package that outputs approximate/questionable p-values, {lmerTest}.
+_Where are the p-values?_ In mixed-effect models the distribution of t values for the null hypothesis is not known, at least not for unbalanced data. P-values can be approximated (sometimes), but not calculated precisely. The {lme4} developers elected to not output p-values. Probably better to look at confidence intervals anyway. See _Appendix_ for a package that outputs approximate/questionable p-values, {lmerTest}.
 
 The _Random Effects_ section reports two standard deviations: one for id and and one called "Residual". The first is the estimate of the standard deviation of the normal distribution from which the subject-specific noise was drawn: 1.157. The second is the estimate of the standard deviation of the normal distribution from which the observation-specific noise was drawn: 1.795. Recall the true values were 2 and 1.5, respectively. 
 
@@ -390,6 +390,12 @@ Is this model any good? One way to check is to simply check the constant varianc
 
 ```{r}
 plot(lmm1)
+```
+
+Check constant variance for rats. 
+
+```{r}
+plot(lmm1, subject ~ resid(.))
 ```
 
 Let's plot the fitted model using ggeffects. 
