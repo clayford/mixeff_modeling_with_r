@@ -115,7 +115,7 @@ First let's generate an id variable to identify subjects. We can generate 7 id n
 id <- gl(n = 7, k = 10)
 ```
 
-Next we generate an independent predictor variable, which is simply the numbers 1 - 10. We use the `rep()` to replicate the vector 1:10 7 times.
+Next we generate an independent predictor variable, which is simply the numbers 1 - 10. We use the `rep()` to replicate the vector 1:10 seven times.
 
 ```{r}
 x <- rep(1:10, 7)
@@ -249,7 +249,7 @@ lattice::qqmath(ranef(me1))
 
 This is similar to the previous plot but only has 7 points (one for each subject). It also has a +/- 1 standard deviation bar to give some sense of the uncertainty in the estimate of each subject's random effect. We'd like those points to roughly form a diagonal line.
 
-Violations of these assumptions, especially the constant variance assumption, usually mean we have a poor model. Sometimes we can try transforming the dependent variable, including an interaction, or allowing non-linear effects. But sometimes there's nothing we can do. The variation in the dependent variable may not be well explained by the candidate predictor variables. 
+Violations of these assumptions could mean we have a poor model. Sometimes we can try transforming the dependent variable, including an interaction, or allowing non-linear effects. But sometimes there's nothing we can do. The variation in the dependent variable may not be well explained by the candidate predictor variables. 
 
 ## Using our model for predictions
 
@@ -293,10 +293,10 @@ ggpredict(me1, terms = "x") |>
   plot(show_data = TRUE)
 ```
 
-To incorporate the additional uncertainty due to each subject's random effect, we set `type = "random"` (for "random effects"). Notice the confidence ribbon is much wider.
+To incorporate the additional uncertainty due to each subject's random effect, we set `type = "random"` (for "random effects") and add "id" to the `terms` argument. Now we have confidence ribbons for each subject.
 
 ```{r}
-ggpredict(me1, terms = "x", type = "random") |>
+ggpredict(me1, terms = c("x", "id"), type = "random") |>
   plot(show_data = TRUE)
 ```
 
@@ -411,7 +411,7 @@ It appears we may need to let the trajectory over weeks vary by treatment. We ca
 ## CODE ALONG 2
 
 
-1. Let's fit a model with an interaction between treat and weeks, and let's leave the intercept conditional on subject. Call the model `lmm2`
+1. Let's fit a model with an interaction between treat and weeks, and let's leave the intercept conditional on subject. Add `treat:weeks` to the model specified in lmm1. Call the model `lmm2`
 
 
 
@@ -620,10 +620,11 @@ The difference in trend looks to be at least 5 between thioruacil and the other 
 
 If our mixed-effect model is good, it should generate data similar to our observed data. This is sometimes called a "posterior predictive check". The `simulate()` function allows us to use our model to rapidly generate new responses using our model. We can then compare the distribution of the model generated responses to the distribution of our observed response data.
 
-Let's try `lmm5`. Recall the `lmm5` model formula:
+Let's try `lmm5`. Recall the `lmm5` model:
 
 ```{r}
-formula(lmm5)
+lmm5 <- lmer(wt ~ poly(weeks, 2) * treat + (1 | subject) + 
+               (0 + weeks | subject), data = ratdrink)
 ```
 
 Below we specify 100 simulations and then use a `for` loop to plot a density curve for each simulation over the density curve of our observed data. The `ylim = c(0, 0.011)` argument was determined via trial and error.
@@ -691,7 +692,7 @@ head(b.out$t)
 quantile(b.out$t, probs = c(0.025, 0.975))
 ```
 
-Compare the 95% bootstrap confidence interval to the 95% confidence interval returned by {emmeans} which uses something called the "Kenward-Roger approximation". The bootstrap CI is much tighter compared to the approximated CI [-60.0, -19.7].
+Compare the 95% bootstrap confidence interval to the 95% confidence interval returned by {emmeans} which uses something called the "Kenward-Roger approximation". The bootstrap CI is tighter compared to the approximated CI [-60.0, -19.7].
 
 ```{r}
 emm_out <- emmeans(lmm5, pairwise ~ treat, at = data.frame(weeks = 4)) |>
@@ -723,9 +724,9 @@ Thanks for coming. See the Appendix below for more topics.
 For help and advice with statistics, contact us to set up an appointment: `statlab@virginia.edu`
 
 Sign up for more workshops or see past workshops:
-http://data.library.virginia.edu/training/
+https://library.virginia.edu/data/training
 
-Register for the Research Data Services newsletter: http://data.library.virginia.edu/newsletters/
+Register for the Research Data Services newsletter: https://library.virginia.edu/data/newsletters
 
 ## References
 
@@ -768,7 +769,7 @@ The fixed effect estimates are the same.
 cbind("me1" = fixef(me1), "me2" = fixef(me2))
 ```
 
-So why is ML even available to use as an estimator if it returns biased estimators? It turns out that REML is not a suitable estimator when comparing models that differ _only in their fixed effects_. We will see this in action later in the workshop.
+So why is ML even available to use as an estimator if it returns biased estimators? It turns out that REML is not a suitable estimator when comparing models that differ _only in their fixed effects_. 
 
 If you have a good amount of data and propose a reasonable model, the difference in ML and REML estimation will likely be slight. Doug Bates, the author of the {lme4} package, had this to say about REML on the R mixed models mailing list back in 2015:
 
@@ -904,7 +905,7 @@ Instead we turn to the {RLRsim} package, which provides simulation-based exact l
 
 The `exactRLRT()` function takes three arguments:
 
-1. m: the model with just the random effect were testing (weeks)
+1. m: the model with just the random effect we're testing (weeks)
 2. mA: the full model with both random effects (intercept and weeks)
 3. m0: the model with just the random effect that remains (intercept)
 

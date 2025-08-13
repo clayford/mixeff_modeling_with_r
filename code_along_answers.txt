@@ -52,7 +52,7 @@ coef(me4)
 ## CODE ALONG 2
 
 
-1. Let's fit a model with an interaction between treat and weeks, and let's leave the intercept conditional on subject. Call the model `lmm2`
+1. Let's fit a model with an interaction between treat and weeks, and let's leave the intercept conditional on subject. Add `treat:weeks` to the model specified in lmm1. Call the model `lmm2`
 
 ```{r}
 lmm2 <- lmer(wt ~ treat * weeks + (1 | subject), data=ratdrink)
