@@ -263,7 +263,7 @@ predict(m, newdata = data.frame(x = 3),
 _Predictions with mixed-effect/multilevel models require extra thought_. We need to decide whether or not we want to condition on random effects. In other words, are we making a prediction....
 
 - for any subject, or 
-- for a particular subject, such as subject 3 (id = 3)?
+- for a particular subject, such as subject 4 (id = 4)?
 
 To make a _prediction for any subject_, perhaps a new subject who wasn't sampled, we specify `re.form=NA`. This says just use fixed effects to make a prediction. This is usually how mixed-effect models are used when making predictions. Predict expected y when x = 3 for _any subject_:
 
@@ -272,10 +272,10 @@ predict(me1, newdata = data.frame(x = 3),
         re.form=NA)
 ```
 
-To make a _prediction for a specific subject_, we drop the `re.form=NA` argument and include `id` in our new data frame. Predict expected y when x = 3 for _for subject 3 (id = 3)_.
+To make a _prediction for a specific subject_, we drop the `re.form=NA` argument and include `id` in our new data frame. Predict expected y when x = 3 for _for subject 4 (id = 4)_.
 
 ```{r}
-predict(me1, newdata = data.frame(x = 3, id = 3))
+predict(me1, newdata = data.frame(x = 3, id = 4))
 ```
 
 There is no option for confidence intervals. From the {lme4} documentation for predict: "There is no option for computing standard errors of predictions because it is difficult to define an efficient method that incorporates uncertainty in the variance parameters." That means we cannot simply ask for confidence intervals for our predictions. We can however use the bootstrap. (see _Using Simulation with Mixed-Effect Models section_ below)
@@ -324,7 +324,7 @@ Add new R code chunks by clicking the *Insert Chunk* button on the toolbar or by
 3. Check the constant variance assumption for the observations. What do you think?
 
 
-4. Now fit a model that assumes the subject exerts a random effect on both the intercept and slope, using the formula `y ~ x + (x|id)`. Call the model `me4`.
+4. Now fit a model that assumes the subject exerts a random effect on _both_ the intercept and slope, using the formula `y ~ x + (x|id)`. Call the model `me4`.
 
 
 5. Check the assumption of constant variance for the observation random effect for `me4`. What do you think?
@@ -467,7 +467,7 @@ confint(lmm2, oldNames = FALSE, method = "boot")
 
 We have many options when building a mixed-effect model. In addition to what predictors to include and whether they should interact, we get to decide how many random effects to allow. This leads to multiple candidate models. How can we decide which model is "best"?
 
-When comparing mixed-effect models it's probably best to either...
+When comparing mixed-effect models it's best to either...
 
 - compare models that differ _only in fixed effects_
 - compare models that differ _only in random effects_
@@ -559,7 +559,7 @@ One option is to use the {RLRsim} package, which provides simulation-based exact
 
 ## CODE ALONG 3
 
-1. Update model lmm4 with a non-linear effect on weeks using `poly(weeks, 2)`. This is a second degree polynomial. Call the model `lmm5`.
+1. Update model lmm4 with a non-linear effect on weeks using `ns(weeks, 2)`. This is a second degree natural spline. Call the model `lmm5`.
 
 
 2. How does this model compare to `lmm4`, which has a simple linear effect on weeks?
@@ -623,7 +623,8 @@ If our mixed-effect model is good, it should generate data similar to our observ
 Let's try `lmm5`. Recall the `lmm5` model:
 
 ```{r}
-lmm5 <- lmer(wt ~ poly(weeks, 2) * treat + (1 | subject) + 
+library(splines)
+lmm5 <- lmer(wt ~ ns(weeks, 2) * treat + (1 | subject) + 
                (0 + weeks | subject), data = ratdrink)
 ```
 
@@ -692,7 +693,7 @@ head(b.out$t)
 quantile(b.out$t, probs = c(0.025, 0.975))
 ```
 
-Compare the 95% bootstrap confidence interval to the 95% confidence interval returned by {emmeans} which uses something called the "Kenward-Roger approximation". The bootstrap CI is tighter compared to the approximated CI [-60.0, -19.7].
+Compare the 95% bootstrap confidence interval to the 95% confidence interval returned by {emmeans} which uses something called the "Kenward-Roger approximation". The bootstrap CI is tighter compared to the approximated CI [-59.9, -19.7].
 
 ```{r}
 emm_out <- emmeans(lmm5, pairwise ~ treat, at = data.frame(weeks = 4)) |>
