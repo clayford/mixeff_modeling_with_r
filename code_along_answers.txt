@@ -91,7 +91,7 @@ lmm5 <- lmer(wt ~ ns(weeks, 2) * treat + (1 | subject) +
                (0 + weeks | subject), data = ratdrink)
 ```
 
-2. How does this model compare to `lmm4`, which has a simpl linear effect on weeks?
+2. How does this model compare to `lmm4`, which has a simple linear effect on weeks?
 
 
 ```{r}
